@@ -70,3 +70,9 @@ For this MVP, simple terminal output is sufficient:
 
 - sensor reads can be compared against an external reference tool
 - fan RPM reads/writes can be confirmed by observing visible RPM changes
+
+## Local build / sudo caveat
+
+- Avoid using `sudo swift build` or `sudo swift run` unless root is strictly required for the command being tested.
+- If root-owned artifacts end up inside `.build/` after a sudo run, later non-sudo builds may fail with `Operation not permitted` when SwiftPM tries to overwrite them.
+- In that case, prefer removing the specific root-owned build artifacts (or cleaning `.build/`) before rebuilding as the normal user.
