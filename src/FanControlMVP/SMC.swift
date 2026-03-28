@@ -191,12 +191,7 @@ final class SMCConnection {
 
         let raw = UInt16(clamped * 4)
         let bytes = [UInt8((raw >> 8) & 0xff), UInt8(raw & 0xff)]
-
-        do {
-            try write(key: targetKey, dataType: "fpe2", bytes: bytes)
-        } catch {
-            try write(key: fanKey(index, suffix: "Mn"), dataType: "fpe2", bytes: bytes)
-        }
+        try write(key: targetKey, dataType: "fpe2", bytes: bytes)
     }
 
     private func writeUnsignedInt(key: String, value: Int) throws {
