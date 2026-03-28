@@ -17,9 +17,39 @@ struct CLI {
             return .fans
         case "write":
             return .write(try parseWrite(arguments.dropFirst(2)))
+        case "auto":
+            return .automatic(try parseAutomatic(arguments.dropFirst(2)))
+        case "writer-service":
+            return .writerService
         default:
             throw CLIError("unknown command: \(arguments[1])\n\n\(usage())")
         }
+    }
+
+    private func parseAutomatic(_ args: ArraySlice<String>) throws -> AutomaticControlOptions {
+        var configPath: String?
+        var dryRun = false
+
+        var iterator = args.makeIterator()
+        while let arg = iterator.next() {
+            switch arg {
+            case "--config":
+                guard let value = iterator.next(), !value.isEmpty else {
+                    throw CLIError("--config requires a file path")
+                }
+                configPath = value
+            case "--dry-run":
+                dryRun = true
+            default:
+                throw CLIError("unknown option for auto: \(arg)")
+            }
+        }
+
+        guard let configPath else {
+            throw CLIError("auto requires --config <path>")
+        }
+
+        return AutomaticControlOptions(configPath: configPath, dryRun: dryRun)
     }
 
     private func parseWrite(_ args: ArraySlice<String>) throws -> WriteOptions {
@@ -102,11 +132,13 @@ struct CLI {
           fancontrol-mvp temps [--friendly|--raw]
           fancontrol-mvp fans
           sudo fancontrol-mvp write --fan <index> --rpm <target> [--hold-seconds 10] [--verify-interval 1]
+          fancontrol-mvp auto --config <path> [--dry-run]
 
         Commands:
           temps    Print temperature probes from the unified multi-source inventory
           fans     Print current fan RPM readings and fan metadata
           write    Attempt a manual fan RPM override, verify readback, then restore auto mode
+          auto     Start config-driven automatic fan control via the helper-backed writer path
         """
     }
 }
@@ -115,6 +147,8 @@ enum Command {
     case temperatures(TemperatureOptions)
     case fans
     case write(WriteOptions)
+    case automatic(AutomaticControlOptions)
+    case writerService
 
     func run() throws {
         switch self {
@@ -128,6 +162,10 @@ enum Command {
             let smc = try SMCConnection.open()
             defer { smc.close() }
             try FanWriteCommand(connection: smc, options: options).run()
+        case .automatic(let options):
+            try AutomaticControlCommand(options: options).run()
+        case .writerService:
+            try WriterServiceCommand().run()
         }
     }
 }

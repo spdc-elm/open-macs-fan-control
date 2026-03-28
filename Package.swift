@@ -29,6 +29,11 @@ let package = Package(
                 .linkedFramework("IOKit"),
                 .linkedFramework("CoreFoundation")
             ]
+        ),
+        .testTarget(
+            name: "FanControlMVPTests",
+            dependencies: ["FanControlMVP"],
+            path: "Tests/FanControlMVPTests"
         )
     ]
 )

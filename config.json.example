@@ -1,0 +1,24 @@
+{
+  "pollingIntervalSeconds": 2,
+  "minimumWriteIntervalSeconds": 5,
+  "staleSensorTimeoutSeconds": 10,
+  "smoothingStepRPM": 300,
+  "hysteresisRPM": 100,
+  "cpuDomain": {
+    "sensor": "cpu_core_average",
+    "startTemperatureCelsius": 65,
+    "maxTemperatureCelsius": 80
+  },
+  "gpuDomain": {
+    "sensor": "gpu_cluster_average",
+    "startTemperatureCelsius": 65,
+    "maxTemperatureCelsius": 80
+  },
+  "fans": [
+    {
+      "fanIndex": 0,
+      "minimumRPM": 1000,
+      "maximumRPM": 4900
+    }
+  ]
+}

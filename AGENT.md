@@ -76,3 +76,7 @@ For this MVP, simple terminal output is sufficient:
 - Avoid using `sudo swift build` or `sudo swift run` unless root is strictly required for the command being tested.
 - If root-owned artifacts end up inside `.build/` after a sudo run, later non-sudo builds may fail with `Operation not permitted` when SwiftPM tries to overwrite them.
 - In that case, prefer removing the specific root-owned build artifacts (or cleaning `.build/`) before rebuilding as the normal user.
+
+## OpenSpec single-change shortcut
+
+- For `opsx apply` and `opsx archive`: if exactly one active change exists, do not ask the user to choose; use that single active change directly.
