@@ -1,7 +1,7 @@
 # Project context
 
 - This repo is about building a macOS fan-control tool, informed by reverse-engineering notes from an existing reference implementation.
-- Current direction: a **shared-runtime** architecture with multiple client surfaces, starting with a CLI and likely expanding to a menu bar / GUI app, plus a privileged helper boundary for low-level writes.
+- Current direction: a **shared-runtime** architecture with multiple client surfaces (CLI, menu bar app), a dedicated automatic-control controller service, and a privileged root writer daemon for low-level fan writes.
 - Current control idea: aggregate thermal input from **CPU** and **GPU** domains, then use a conservative policy such as `max(cpu_demand, gpu_demand)`.
 
 # Where to look
@@ -13,10 +13,8 @@
   - local truth for one active change
 - `openspec/changes/archive/YYYY-MM-DD-<change>/`
   - historical decisions; read only when the current task clearly depends on prior choices
-- `reverse-engineering-notes.md`
-  - current high-signal notes about the existing binary and likely target architecture
-- `ida-headless` MCP
-  - use this directly when binary-level verification is needed; do not rely only on notes if the task depends on exact behavior
+- `.local-research/reverse-engineering/`
+  - reverse-engineering notes about the reference binary (not tracked in git; local-only)
 
 # Working stance
 
@@ -24,10 +22,8 @@
 - Do **not** start every new conversation from blank-slate explore if repo-level specs already exist.
 - Prefer this context-loading order:
   1. relevant `openspec/specs/`
-  2. `reverse-engineering-notes.md` when architecture / reverse-engineering context matters
-  3. active change artifacts
-  4. archived changes only if needed
-  5. `ida-headless` MCP when verification against the binary is needed
+  2. active change artifacts
+  3. archived changes only if needed
 
 # OpenSpec complement
 
@@ -48,46 +44,30 @@ From the current notes and current exploration decisions:
 - helper installation uses **Authorization + SMJobBless + launchd**
 - aggregate / average sensors already exist in the original product
 - the main limitation appears to be the control model being tied to **one sensor key per fan mode**
-- the likely path here is a shared runtime used by multiple shells rather than treating one executable as the whole product
+- the architecture uses a shared runtime consumed by multiple client shells rather than a single monolithic executable
 
 # Current project baseline
 
 - Primary implementation language: **Swift**
-- Product shape: **shared runtime + CLI + future GUI/app surfaces**, with a likely split between user-facing clients, possible user-session daemon behavior, and a minimal privileged helper
-- Startup model for the near-term product: **start on user login**, not system boot
-- Privilege model: keep sensor reading and control logic outside root when possible; isolate low-level fan write operations behind a **minimal privileged helper**
-- Near-term priority: preserve the validated CLI path while extracting a reusable shared runtime for future product surfaces
+- Product shape: **shared runtime + CLI + menu bar app + controller service + privileged root writer daemon**
+- Startup model: **start on user login**, not system boot
+- Privilege model: sensor reading and control logic run unprivileged; only the root writer daemon has elevated privileges for low-level fan writes
 
 ## Current module layout
 
-- `src/FanControlRuntime/`
-  - reusable hardware, telemetry, config, and control-support logic
-- `src/FanControlCLI/`
-  - CLI parsing, terminal-facing command flow, and executable entrypoint
-- `Package.swift`
-  - package name: `MacsFanControl`
-  - shared runtime target: `FanControlRuntime`
-  - CLI executable target/product: `FanControlCLI` / `fan-control-cli`
+- `src/CSMCBridge/` — C bridging header for SMC access
+- `src/FanControlRuntime/` — reusable hardware, telemetry, config, IPC, and control-support logic
+- `src/FanControlCLI/` — CLI parsing, terminal-facing command flow, and executable entrypoint (`fan-control-cli`)
+- `src/FanControlController/` — dedicated automatic-control service (`fan-control-controller`)
+- `src/FanControlMenuBar/` — SwiftUI menu bar app (`fan-control-menu-bar`)
+- `src/RootWriterDaemon/` — minimal privileged helper for fan writes (`root-writer-daemon`)
+- `Package.swift` — package name: `MacsFanControl`
 
 ## Current architecture direction
 
-- Do **not** assume the current MVP executable layout is the intended end-state architecture.
-- Prefer a boundary of: **shared runtime/core** → thin CLI shell → future GUI/menu bar shell.
-- GUI clients should reuse shared Swift APIs directly; they should **not** shell out to the CLI and parse terminal output.
+- Boundary: **shared runtime** → thin client shells (CLI, menu bar app) → controller service → root writer daemon.
+- GUI clients reuse shared Swift APIs directly; they do **not** shell out to the CLI.
 - CLI remains a first-class operator/debugging surface, not a disposable prototype.
-
-# Current MVP validation scope
-
-The first proof-of-viability should answer only the highest-risk hardware questions:
-
-- can a Swift-based tool read the relevant temperature sensors on the target machine?
-- can it read the current fan RPM values?
-- can it successfully write fan RPM changes through the intended privilege path?
-
-For this MVP, simple terminal output is sufficient:
-
-- sensor reads can be compared against an external reference tool
-- fan RPM reads/writes can be confirmed by observing visible RPM changes
 
 ## Local build / sudo caveat
 

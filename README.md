@@ -2,6 +2,12 @@
 
 Swift macOS fan-control workspace organized around a shared runtime (`FanControlRuntime`), a dedicated automatic-control service (`fan-control-controller`), a privileged root writer daemon (`root-writer-daemon`), and thin CLI / menu bar clients over those shared boundaries.
 
+## Prerequisites
+
+- macOS 13 (Ventura) or later
+- Swift 6.0+ (included with Xcode 16+)
+- Apple Silicon Mac (Intel Macs are not currently tested)
+
 ## Current architecture
 
 - `FanControlRuntime` owns reusable hardware access, telemetry assembly, configuration loading, controller IPC models, and control-support logic.
@@ -81,3 +87,7 @@ This project's Apple Silicon SMC temperature-key family tables were adapted with
 - [dkorunic/iSMC](https://github.com/dkorunic/iSMC)
 
 In particular, the current Swift implementation borrows from iSMC's documented `src/temp.txt` Apple Silicon key mapping approach and its model-family grouping strategy.
+
+## License
+
+This project is licensed under the [GNU General Public License v3.0](LICENSE).

@@ -3,6 +3,7 @@
 dist/
 .codex/
 config.json
+opencode.json
 
 # Reverse engineering artifacts
 .local-research/
