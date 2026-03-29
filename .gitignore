@@ -4,22 +4,7 @@
 config.json
 
 # Reverse engineering artifacts
-macs-fan-control_arm64
-macs-fan-control_arm64.*
-MacsFanControl_x86_64
-MacsFanControl_x86_64.*
-*.i64
-*.id0
-*.id1
-*.id2
-*.nam
-*.til
-reverse-engineering-notes.md
-ida-iohid-temperature-investigation.md
-max-fan-control-apple-silicon-temperature-read-path.md
-max-fan-control-temperature-source-overview.md
-extracted-IOKitSensors.xml
-extracted-IOKitSensors.xml.gz
+.local-research/
 
 # Local reference repositories
 vendor/iSMC/
