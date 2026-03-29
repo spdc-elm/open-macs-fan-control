@@ -126,52 +126,6 @@ final class MenuBarControllerStore: ObservableObject {
     }
 }
 
-struct MenuBarExtraLabel: View {
-    let snapshot: TelemetrySnapshot
-    let controllerStatus: AutomaticControlStatusSnapshot
-    let controllerErrorMessage: String?
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Text(
-                "CPU \(formatTemperature(snapshot.cpuAverageCelsius))  GPU \(formatTemperature(snapshot.gpuAverageCelsius))  FAN \(formatFanSummary(snapshot.fanSummary))"
-            )
-            .monospacedDigit()
-
-            Circle()
-                .fill(indicatorColor)
-                .frame(width: 7, height: 7)
-                .overlay {
-                    Circle()
-                        .stroke(.white.opacity(0.35), lineWidth: 0.5)
-                }
-        }
-    }
-
-    private func formatTemperature(_ value: TelemetryValue<Double>) -> String {
-        guard let temperature = value.value else {
-            return "--"
-        }
-
-        return "\(Int(temperature.rounded()))°"
-    }
-
-    private func formatFanSummary(_ summary: FanTelemetrySummary) -> String {
-        guard let averageCurrentRPM = summary.averageCurrentRPM else {
-            return "--"
-        }
-
-        return "\(averageCurrentRPM)"
-    }
-
-    private var indicatorColor: Color {
-        if controllerErrorMessage != nil || controllerStatus.phase == .failed {
-            return .red
-        }
-        return .green
-    }
-}
-
 struct MenuBarPanel: View {
     @ObservedObject var store: MenuBarTelemetryStore
     @ObservedObject var controllerStore: MenuBarControllerStore

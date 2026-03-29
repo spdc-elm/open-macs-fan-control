@@ -1,0 +1,3 @@
+- [x] Update the compact menu bar label layout to use less horizontal space while preserving CPU, GPU, and fan summary values.
+- [x] Remap the status indicator to automatic-control lifecycle states and ensure it remains visible in the menu bar.
+- [x] Build the menu bar target to confirm the UI compiles.

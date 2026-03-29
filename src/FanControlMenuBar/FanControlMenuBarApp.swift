@@ -9,7 +9,7 @@ struct FanControlMenuBarApp: App {
         MenuBarExtra {
             MenuBarPanel(store: store, controllerStore: controllerStore)
         } label: {
-            MenuBarExtraLabel(
+            StatusItemLabel(
                 snapshot: store.snapshot,
                 controllerStatus: controllerStore.status,
                 controllerErrorMessage: controllerStore.errorMessage

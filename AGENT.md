@@ -98,3 +98,38 @@ For this MVP, simple terminal output is sufficient:
 ## OpenSpec single-change shortcut
 
 - For `opsx apply` and `opsx archive`: if exactly one active change exists, do not ask the user to choose; use that single active change directly.
+
+# Menu bar app development
+
+## Build and run
+
+- Build: `swift build --product fan-control-menu-bar`
+- Package into `.app` bundle: `bash scripts/package-menu-bar-app.sh`
+- Run: `open dist/MacsFanControlMenuBar.app`
+- The `.app` bundle is required for menu bar items to display correctly; running the bare executable will not show `NSStatusItem` or `MenuBarExtra` labels.
+
+## UI debugging via process logs
+
+When debugging menu bar UI issues, use `NSLog` statements and read them back via `log show`:
+
+1. Add `NSLog("[FanControlMenuBar] ...")` at key points (e.g., `applicationDidFinishLaunching`, image render size, button existence checks).
+2. Launch the bare binary in the background: `.build/debug/fan-control-menu-bar &`
+3. Read logs: `log show --predicate 'process == "fan-control-menu-bar"' --last 10s --style compact`
+
+This gives a feedback loop for verifying whether lifecycle methods fire, whether views/images have non-zero sizes, and whether data is flowing — without relying solely on visual inspection by the user.
+
+## Menu bar label rendering approach
+
+The current approach uses **SwiftUI `ImageRenderer`** to render a custom SwiftUI view into an `NSImage`, which is then set as the `MenuBarExtra` label via `Image(nsImage:)`.
+
+Key details:
+- Set `renderer.scale = NSScreen.main?.backingScaleFactor ?? 2.0` for crisp rendering on Retina displays.
+- Set `nsImage.isTemplate = false` to preserve colors (otherwise macOS forces monochrome).
+- This avoids the complexity of `NSStatusItem` + `NSPopover` while still allowing multi-line, multi-color labels.
+- The `MenuBarExtra(.window)` style handles popover positioning, dismissal, and animation automatically.
+
+### What didn't work (lessons learned)
+
+- **NSStatusItem + custom NSView as button subview**: the button's hit-testing and sizing interact poorly with embedded subviews; the status item may appear invisible even when the view has correct intrinsic size.
+- **NSStatusItem + NSPopover**: popover positioning relative to the status bar button is unreliable; it may appear above the screen or with incorrect alignment. The `.transient` behavior also requires manual `NSApp.activate(ignoringOtherApps: true)` for agent apps.
+- **`@main` on `NSApplicationDelegate` with `static func main()`**: in Swift 6 strict concurrency, `@MainActor` isolation on the class doesn't always propagate to `static func main()` correctly. Using a separate `main.swift` with explicit `NSApplication.shared` / `app.delegate` / `app.run()` is more reliable, but the SwiftUI `App` lifecycle is simpler when it suffices.
