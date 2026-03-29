@@ -14,6 +14,10 @@ let package = Package(
         .executable(
             name: "fan-control-cli",
             targets: ["FanControlCLI"]
+        ),
+        .executable(
+            name: "fan-control-menu-bar",
+            targets: ["FanControlMenuBar"]
         )
     ],
     targets: [
@@ -38,6 +42,11 @@ let package = Package(
             name: "FanControlCLI",
             dependencies: ["FanControlRuntime"],
             path: "src/FanControlCLI"
+        ),
+        .executableTarget(
+            name: "FanControlMenuBar",
+            dependencies: ["FanControlRuntime"],
+            path: "src/FanControlMenuBar"
         ),
         .testTarget(
             name: "FanControlRuntimeTests",

@@ -9,8 +9,8 @@ struct TemperatureProbe {
         print("# Multi-source inventory: IOHID + SMC + GPU fallback are loaded together and refreshed uniformly.")
         print("# Compare these values against a trusted external reference on the same machine.")
 
-        let inventory = TemperatureInventory.loadDefault()
-        let readings = inventory.refreshAll()
+        let telemetry = TelemetryReader()
+        let readings = telemetry.refresh().temperatures
 
         guard !readings.isEmpty else {
             throw CLIError("no readable temperature sensors were found from the current provider set")
@@ -63,7 +63,13 @@ struct FanProbe {
 
     func run() throws {
         print("# Fan probe")
-        for fan in try connection.readFans() {
+        let inventory = TemperatureInventory.loadDefault()
+        let telemetry = TelemetryReader(
+            inventory: inventory,
+            readFans: { (try? connection.readFans()) ?? [] }
+        )
+
+        for fan in telemetry.refresh().fans {
             let target = fan.targetRPM.map(String.init) ?? "n/a"
             print("fan \(fan.index): current=\(fan.currentRPM)rpm min=\(fan.minimumRPM)rpm max=\(fan.maximumRPM)rpm target=\(target) mode=\(fan.modeDescription)")
         }

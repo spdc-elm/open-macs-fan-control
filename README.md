@@ -6,6 +6,7 @@ Swift macOS fan-control workspace organized around a shared runtime (`FanControl
 
 - `FanControlRuntime` owns reusable hardware access, telemetry assembly, configuration loading, and control-support logic.
 - `fan-control-cli` is a thin command-line shell over that runtime.
+- `fan-control-menu-bar` is a SwiftUI menu bar shell over the same runtime.
 - Future GUI/menu bar work should depend on `FanControlRuntime` directly rather than shelling out to the CLI.
 
 ## Current temperature model
@@ -21,6 +22,13 @@ Swift macOS fan-control workspace organized around a shared runtime (`FanControl
 - `swift run fan-control-cli fans`
 - `swift run fan-control-cli auto --config <path> [--dry-run]`
 - `sudo swift run fan-control-cli write --fan <index> --rpm <target>`
+- `swift run fan-control-menu-bar`
+
+## Menu bar app packaging
+
+- Chosen app host path: a SwiftPM menu bar executable plus a small local bundling script.
+- Build/package a runnable app bundle with: `./scripts/package-menu-bar-app.sh`
+- Launch the packaged app with: `open dist/MacsFanControlMenuBar.app`
 
 ## Reference work
 
