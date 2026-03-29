@@ -18,10 +18,13 @@ Swift macOS fan-control workspace organized around a shared runtime (`FanControl
 
 ## Current CLI surface
 
+- Install or refresh the root writer daemon with: `sudo swift run fan-control-cli daemon install`
+- Inspect daemon status with: `swift run fan-control-cli daemon status`
 - `swift run fan-control-cli temps [--friendly|--raw]`
 - `swift run fan-control-cli fans`
 - `swift run fan-control-cli auto --config <path> [--dry-run]`
-- `sudo swift run fan-control-cli write --fan <index> --rpm <target>`
+- `swift run fan-control-cli write --fan <index> --rpm <target>`
+- Remove the daemon with: `sudo swift run fan-control-cli daemon remove`
 - `swift run fan-control-menu-bar`
 
 ## Menu bar app packaging

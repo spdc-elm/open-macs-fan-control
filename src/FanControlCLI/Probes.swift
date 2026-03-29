@@ -59,17 +59,12 @@ struct TemperatureProbe {
 }
 
 struct FanProbe {
-    let connection: SMCConnection
+    let writer: any PrivilegedFanWriter
 
     func run() throws {
         print("# Fan probe")
-        let inventory = TemperatureInventory.loadDefault()
-        let telemetry = TelemetryReader(
-            inventory: inventory,
-            readFans: { (try? connection.readFans()) ?? [] }
-        )
-
-        for fan in telemetry.refresh().fans {
+        print("# Fan state is read through the root writer daemon.")
+        for fan in try writer.inspectFans() {
             let target = fan.targetRPM.map(String.init) ?? "n/a"
             print("fan \(fan.index): current=\(fan.currentRPM)rpm min=\(fan.minimumRPM)rpm max=\(fan.maximumRPM)rpm target=\(target) mode=\(fan.modeDescription)")
         }
@@ -77,30 +72,29 @@ struct FanProbe {
 }
 
 struct FanWriteCommand {
-    let connection: SMCConnection
+    let writer: any PrivilegedFanWriter
     let options: WriteOptions
 
     func run() throws {
-        guard geteuid() == 0 else {
-            throw CLIError("write requires root privileges; rerun with sudo")
+        let fanInventory = try writer.inspectFans()
+        guard let fan = fanInventory.first(where: { $0.index == options.fanIndex }) else {
+            throw CLIError("fan \(options.fanIndex) is unavailable from the root writer daemon")
         }
-
-        let fan = try connection.readFan(index: options.fanIndex)
         let clampedTarget = max(fan.minimumRPM, min(fan.maximumRPM, options.rpm))
 
         print("# Manual write validation")
-        print("# This sudo-driven path is the MVP stand-in for a future dedicated helper.")
+        print("# Manual writes are issued through the root writer daemon.")
+        print("writerDaemonSocket=\(RootWriterDaemonPaths.socketPath)")
         print("fan \(fan.index): current=\(fan.currentRPM)rpm min=\(fan.minimumRPM)rpm max=\(fan.maximumRPM)rpm")
 
         let signalMonitor = SignalMonitor()
         defer { signalMonitor.stop() }
 
-        try connection.setFanManualMode(index: fan.index)
         var shouldRestore = true
         defer {
             if shouldRestore {
                 do {
-                    try connection.restoreAutomaticMode(index: fan.index)
+                    try writer.restoreAutomaticMode(fanIndices: [fan.index])
                     print("restored automatic mode for fan \(fan.index)")
                 } catch {
                     FileHandle.standardError.write(Data(("warning: failed to restore automatic mode for fan \(fan.index): \(error.localizedDescription)\n").utf8))
@@ -108,7 +102,7 @@ struct FanWriteCommand {
             }
         }
 
-        try connection.setFanTargetRPM(index: fan.index, rpm: clampedTarget)
+        try writer.applyTarget(fanIndex: fan.index, rpm: clampedTarget)
         print("requested target: \(clampedTarget)rpm")
         let holdSeconds = String(format: "%.1f", options.holdSeconds)
         print("observing for \(holdSeconds)s; press Ctrl-C for handled early exit")
@@ -123,7 +117,9 @@ struct FanWriteCommand {
             }
 
             if Date() >= nextPoll {
-                let updated = try connection.readFan(index: fan.index)
+                guard let updated = try writer.inspectFans().first(where: { $0.index == fan.index }) else {
+                    throw CLIError("fan \(fan.index) disappeared from the root writer daemon inventory")
+                }
                 let target = updated.targetRPM.map(String.init) ?? "n/a"
                 print("readback: current=\(updated.currentRPM)rpm target=\(target) mode=\(updated.modeDescription)")
                 nextPoll = Date().addingTimeInterval(options.verifyInterval)

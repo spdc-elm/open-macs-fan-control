@@ -9,7 +9,7 @@ package final class SignalMonitor {
         signal(SIGTERM, SIG_IGN)
 
         for sig in [SIGINT, SIGTERM] {
-            let source = DispatchSource.makeSignalSource(signal: sig, queue: .main)
+            let source = DispatchSource.makeSignalSource(signal: sig, queue: .global(qos: .userInitiated))
             source.setEventHandler { [weak self] in
                 self?.terminationRequested = true
             }

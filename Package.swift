@@ -12,6 +12,10 @@ let package = Package(
             targets: ["FanControlRuntime"]
         ),
         .executable(
+            name: "root-writer-daemon",
+            targets: ["RootWriterDaemon"]
+        ),
+        .executable(
             name: "fan-control-cli",
             targets: ["FanControlCLI"]
         ),
@@ -37,6 +41,11 @@ let package = Package(
                 .linkedFramework("IOKit"),
                 .linkedFramework("CoreFoundation")
             ]
+        ),
+        .executableTarget(
+            name: "RootWriterDaemon",
+            dependencies: ["FanControlRuntime"],
+            path: "src/RootWriterDaemon"
         ),
         .executableTarget(
             name: "FanControlCLI",

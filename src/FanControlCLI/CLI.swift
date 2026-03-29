@@ -20,10 +20,27 @@ struct CLI {
             return .write(try parseWrite(arguments.dropFirst(2)))
         case "auto":
             return .automatic(try parseAutomatic(arguments.dropFirst(2)))
-        case "writer-service":
-            return .writerService
+        case "daemon":
+            return .daemon(try parseDaemon(arguments.dropFirst(2)))
         default:
             throw CLIError("unknown command: \(arguments[1])\n\n\(usage())")
+        }
+    }
+
+    private func parseDaemon(_ args: ArraySlice<String>) throws -> DaemonCommandAction {
+        guard let action = args.first else {
+            throw CLIError("daemon requires one of: install, remove, status")
+        }
+
+        switch action {
+        case "install":
+            return .install
+        case "remove":
+            return .remove
+        case "status":
+            return .status
+        default:
+            throw CLIError("unknown daemon action: \(action)")
         }
     }
 
@@ -132,14 +149,17 @@ struct CLI {
         Usage:
           fan-control-cli temps [--friendly|--raw]
           fan-control-cli fans
-          sudo fan-control-cli write --fan <index> --rpm <target> [--hold-seconds 10] [--verify-interval 1]
+          fan-control-cli write --fan <index> --rpm <target> [--hold-seconds 10] [--verify-interval 1]
           fan-control-cli auto --config <path> [--dry-run]
+          sudo fan-control-cli daemon <install|remove>
+          fan-control-cli daemon status
 
         Commands:
           temps    Print temperature probes from the unified multi-source inventory
-          fans     Print current fan RPM readings and fan metadata
-          write    Attempt a manual fan RPM override, verify readback, then restore auto mode
-          auto     Start config-driven automatic fan control via the helper-backed writer path
+          fans     Print current fan RPM readings and fan metadata through the root writer daemon
+          write    Attempt a manual fan RPM override through the root writer daemon, verify readback, then restore auto mode
+          auto     Start config-driven automatic fan control through the root writer daemon
+          daemon   Install, remove, or inspect the root writer daemon lifecycle
         """
     }
 }
@@ -149,26 +169,32 @@ enum Command {
     case fans
     case write(WriteOptions)
     case automatic(AutomaticControlOptions)
-    case writerService
+    case daemon(DaemonCommandAction)
 
     func run() throws {
         switch self {
         case .temperatures(let options):
             try TemperatureProbe(options: options).run()
         case .fans:
-            let smc = try SMCConnection.open()
-            defer { smc.close() }
-            try FanProbe(connection: smc).run()
+            let writer = try DaemonFanWriterClient.connect()
+            defer { try? writer.shutdown() }
+            try FanProbe(writer: writer).run()
         case .write(let options):
-            let smc = try SMCConnection.open()
-            defer { smc.close() }
-            try FanWriteCommand(connection: smc, options: options).run()
+            let writer = try DaemonFanWriterClient.connect()
+            defer { try? writer.shutdown() }
+            try FanWriteCommand(writer: writer, options: options).run()
         case .automatic(let options):
             try AutomaticControlCommand(options: options).run()
-        case .writerService:
-            try WriterServiceCommand().run()
+        case .daemon(let action):
+            try DaemonLifecycleCommand(action: action, cliExecutablePath: CommandLine.arguments[0]).run()
         }
     }
+}
+
+enum DaemonCommandAction {
+    case install
+    case remove
+    case status
 }
 
 struct TemperatureOptions {
@@ -194,5 +220,32 @@ struct CLIError: Error {
     init(_ message: String, exitCode: Int32 = 2) {
         self.message = message
         self.exitCode = exitCode
+    }
+}
+
+struct DaemonLifecycleCommand {
+    let action: DaemonCommandAction
+    let cliExecutablePath: String
+
+    func run() throws {
+        let installer = RootWriterDaemonInstaller(cliExecutablePath: cliExecutablePath)
+
+        switch action {
+        case .install:
+            try installer.install()
+            print("installed root writer daemon")
+            print("binary: \(RootWriterDaemonPaths.executablePath)")
+            print("socket: \(RootWriterDaemonPaths.socketPath)")
+        case .remove:
+            try installer.remove()
+            print("removed root writer daemon")
+        case .status:
+            let status = installer.status()
+            print("# Root writer daemon status")
+            print("binary=\(RootWriterDaemonPaths.executablePath) exists=\(status.installedBinaryExists)")
+            print("launchdPlist=\(RootWriterDaemonPaths.launchDaemonPlistPath) exists=\(status.launchDaemonPlistExists)")
+            print("socket=\(RootWriterDaemonPaths.socketPath) exists=\(status.socketExists)")
+            print("connection=\(status.connectionMessage)")
+        }
     }
 }

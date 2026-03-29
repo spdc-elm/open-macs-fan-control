@@ -23,8 +23,14 @@ The service MUST support starting automatically at user login as the default sel
 - **THEN** the tool starts when that user logs into macOS
 
 ### Requirement: Privileged fan writes are isolated
-The system MUST isolate low-level fan write operations from the main control logic through a minimal privileged boundary.
+The system MUST isolate low-level fan write operations behind a single minimal root writer daemon so the main control logic, CLI, and future GUI/controller surfaces remain unprivileged.
 
 #### Scenario: Control logic requests a fan speed change
 - **WHEN** the non-privileged control path decides to change fan speed
-- **THEN** the low-level write operation is performed by a dedicated privileged component rather than by the entire main process
+- **THEN** it MUST issue that request to the root writer daemon rather than performing the low-level write inside the main process
+- **AND** the root writer daemon MUST perform the low-level write operation
+
+#### Scenario: Another client surface needs fan-write access
+- **WHEN** a CLI flow or future GUI/controller surface needs fan inspection or fan-write access
+- **THEN** it MUST reuse the same root writer daemon boundary
+- **AND** it MUST not introduce a separate privileged helper path for that client surface

@@ -299,6 +299,8 @@ package final class SMCConnection {
     }
 }
 
+extension SMCConnection: FanHardwareControlling {}
+
 private struct SMCReadResult {
     let bytes: [UInt8]
     let dataType: String

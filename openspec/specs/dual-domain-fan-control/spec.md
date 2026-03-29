@@ -40,12 +40,12 @@ The system MUST avoid writing a freshly computed target RPM directly on every po
 - **THEN** the system MUST defer or suppress that write until its throttling rules allow another update
 
 ### Requirement: Low-level fan writes stay behind a privileged writer boundary
-The system MUST perform low-level manual-mode changes, target RPM writes, and automatic-mode restoration through a dedicated privileged writer boundary rather than inside the main control logic.
+The system MUST perform low-level manual-mode changes, target RPM writes, and automatic-mode restoration for automatic control through a dedicated root writer daemon boundary rather than inside the main control logic.
 
 #### Scenario: Control loop applies a new target
 - **WHEN** the unprivileged controller decides that a managed fan needs a new target RPM
-- **THEN** it MUST issue that request through the privileged writer boundary
-- **AND** the privileged writer boundary MUST perform the low-level write operation
+- **THEN** it MUST issue that request through its root writer daemon session
+- **AND** the daemon MUST perform the low-level write operation
 
 ### Requirement: Automatic control fails safe back to automatic mode
 The system MUST relinquish manual fan control when it cannot continue safe automatic control.
@@ -55,6 +55,7 @@ The system MUST relinquish manual fan control when it cannot continue safe autom
 - **THEN** the system MUST stop issuing new manual targets for the affected control session
 - **AND** the system MUST request restoration of automatic fan mode for managed fans
 
-#### Scenario: Controller or helper shutdown is handled
-- **WHEN** the automatic-control process exits through a handled shutdown or detects privileged-writer failure
-- **THEN** the system MUST attempt to restore automatic fan mode for managed fans before exiting
+#### Scenario: Controller exit or writer-session loss is handled
+- **WHEN** the automatic-control process exits through a handled shutdown, loses its root writer daemon session, or detects that the root writer daemon is unavailable
+- **THEN** the system MUST stop issuing new manual targets for the affected control session
+- **AND** it MUST either request restoration of automatic mode before disconnecting or rely on daemon-side session cleanup to restore any still-owned fans

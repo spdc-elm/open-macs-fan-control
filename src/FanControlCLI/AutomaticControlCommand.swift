@@ -11,7 +11,7 @@ struct AutomaticControlCommand {
 
     func run() throws {
         let inventory = TemperatureInventory.loadDefault()
-        let writer = try HelperFanWriterClient.launch(executablePath: CommandLine.arguments[0])
+        let writer = try DaemonFanWriterClient.connect()
         defer {
             try? writer.shutdown()
         }
@@ -111,6 +111,7 @@ struct AutomaticControlCommand {
     private func printResolvedConfiguration(_ config: ResolvedAutomaticControlConfig) {
         print("# Automatic control initialization")
         print("config: \(config.sourcePath)")
+        print("writerDaemonSocket=\(RootWriterDaemonPaths.socketPath)")
         print("pollingIntervalSeconds=\(config.pollingIntervalSeconds) minimumWriteIntervalSeconds=\(config.minimumWriteIntervalSeconds) staleSensorTimeoutSeconds=\(config.staleSensorTimeoutSeconds)")
         print("smoothingStepRPM=\(config.smoothingStepRPM) hysteresisRPM=\(config.hysteresisRPM)")
         print("cpuDomain: sensor=\(config.cpuDomain.sensor) start=\(config.cpuDomain.startTemperatureCelsius)C max=\(config.cpuDomain.maxTemperatureCelsius)C")

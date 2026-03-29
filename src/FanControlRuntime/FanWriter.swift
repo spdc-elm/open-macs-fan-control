@@ -7,28 +7,84 @@ package protocol PrivilegedFanWriter {
     func shutdown() throws
 }
 
-private struct WriterRequest: Codable {
-    let command: String
-    let fanIndex: Int?
-    let rpm: Int?
-    let fanIndices: [Int]?
+package enum FanWriterError: LocalizedError, Equatable {
+    case daemonUnavailable(socketPath: String, reason: String)
+    case conflict(fanIndex: Int)
+    case invalidRequest(String)
+    case protocolViolation(String)
+    case daemonFailure(String)
+
+    package var errorDescription: String? {
+        switch self {
+        case .daemonUnavailable(let socketPath, let reason):
+            return "root writer daemon is unavailable at \(socketPath): \(reason). install/start it with `fan-control-cli daemon install`"
+        case .conflict(let fanIndex):
+            return "fan \(fanIndex) is already owned by another live daemon session"
+        case .invalidRequest(let message):
+            return "invalid daemon request: \(message)"
+        case .protocolViolation(let message):
+            return "daemon protocol error: \(message)"
+        case .daemonFailure(let message):
+            return "root writer daemon error: \(message)"
+        }
+    }
 }
 
-private struct WriterResponse: Codable {
-    let ok: Bool
-    let error: String?
-    let fans: [CodableFanReading]?
+package enum WriterCommand: String, Codable {
+    case inspectFans
+    case applyTarget
+    case restoreAutomaticMode
+    case shutdown
 }
 
-private struct CodableFanReading: Codable {
-    let index: Int
-    let currentRPM: Int
-    let minimumRPM: Int
-    let maximumRPM: Int
-    let targetRPM: Int?
-    let modeValue: Int?
+package struct WriterRequest: Codable {
+    package let command: WriterCommand
+    package let fanIndex: Int?
+    package let rpm: Int?
+    package let fanIndices: [Int]?
 
-    init(_ reading: FanReading) {
+    package init(command: WriterCommand, fanIndex: Int? = nil, rpm: Int? = nil, fanIndices: [Int]? = nil) {
+        self.command = command
+        self.fanIndex = fanIndex
+        self.rpm = rpm
+        self.fanIndices = fanIndices
+    }
+}
+
+package struct WriterResponse: Codable {
+    package let ok: Bool
+    package let errorCode: String?
+    package let errorMessage: String?
+    package let fans: [CodableFanReading]?
+
+    package static func success(fans: [FanReading]? = nil) -> WriterResponse {
+        WriterResponse(
+            ok: true,
+            errorCode: nil,
+            errorMessage: nil,
+            fans: fans?.map(CodableFanReading.init)
+        )
+    }
+
+    package static func failure(code: String, message: String) -> WriterResponse {
+        WriterResponse(
+            ok: false,
+            errorCode: code,
+            errorMessage: message,
+            fans: nil
+        )
+    }
+}
+
+package struct CodableFanReading: Codable {
+    package let index: Int
+    package let currentRPM: Int
+    package let minimumRPM: Int
+    package let maximumRPM: Int
+    package let targetRPM: Int?
+    package let modeValue: Int?
+
+    package init(_ reading: FanReading) {
         index = reading.index
         currentRPM = reading.currentRPM
         minimumRPM = reading.minimumRPM
@@ -37,7 +93,7 @@ private struct CodableFanReading: Codable {
         modeValue = reading.modeValue
     }
 
-    var asFanReading: FanReading {
+    package var asFanReading: FanReading {
         FanReading(
             index: index,
             currentRPM: currentRPM,
@@ -49,193 +105,138 @@ private struct CodableFanReading: Codable {
     }
 }
 
-package final class HelperFanWriterClient: PrivilegedFanWriter {
-    private let process: Process
-    private let stdinPipe: Pipe
-    private let stdoutReader: PipeLineReader
-    private let stderrPipe: Pipe
+package final class DaemonFanWriterClient: PrivilegedFanWriter {
+    private let socketPath: String
+    private let descriptor: Int32
+    private let lineReader: PipeLineReader
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
+    private var isClosed = false
 
-    private init(process: Process, stdinPipe: Pipe, stdoutReader: PipeLineReader, stderrPipe: Pipe) {
-        self.process = process
-        self.stdinPipe = stdinPipe
-        self.stdoutReader = stdoutReader
-        self.stderrPipe = stderrPipe
+    private init(socketPath: String, descriptor: Int32) {
+        self.socketPath = socketPath
+        self.descriptor = descriptor
+        self.lineReader = PipeLineReader(descriptor: descriptor)
     }
 
-    package static func launch(executablePath: String) throws -> HelperFanWriterClient {
-        let process = Process()
-        let stdinPipe = Pipe()
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
+    deinit {
+        try? closeConnection()
+    }
 
-        let executableURL = URL(fileURLWithPath: executablePath)
-        if geteuid() == 0 {
-            process.executableURL = executableURL
-            process.arguments = ["writer-service"]
-        } else {
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/sudo")
-            process.arguments = ["-n", executablePath, "writer-service"]
+    package static func connect(socketPath: String = RootWriterDaemonPaths.socketPath) throws -> DaemonFanWriterClient {
+        let descriptor: Int32
+        do {
+            descriptor = try LocalSocket.connect(to: socketPath)
+        } catch let error as FanWriterError {
+            throw error
+        } catch {
+            throw FanWriterError.daemonUnavailable(socketPath: socketPath, reason: error.localizedDescription)
         }
 
-        process.standardInput = stdinPipe
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
-        try process.run()
-
-        return HelperFanWriterClient(
-            process: process,
-            stdinPipe: stdinPipe,
-            stdoutReader: PipeLineReader(handle: stdoutPipe.fileHandleForReading),
-            stderrPipe: stderrPipe
-        )
+        return DaemonFanWriterClient(socketPath: socketPath, descriptor: descriptor)
     }
 
     package func inspectFans() throws -> [FanReading] {
-        let response = try send(.init(command: "inspectFans", fanIndex: nil, rpm: nil, fanIndices: nil))
+        let response = try send(.init(command: .inspectFans))
         return (response.fans ?? []).map(\.asFanReading)
     }
 
     package func applyTarget(fanIndex: Int, rpm: Int) throws {
-        _ = try send(.init(command: "applyTarget", fanIndex: fanIndex, rpm: rpm, fanIndices: nil))
+        _ = try send(.init(command: .applyTarget, fanIndex: fanIndex, rpm: rpm))
     }
 
     package func restoreAutomaticMode(fanIndices: [Int]) throws {
-        _ = try send(.init(command: "restoreAutomaticMode", fanIndex: nil, rpm: nil, fanIndices: fanIndices))
+        _ = try send(.init(command: .restoreAutomaticMode, fanIndices: fanIndices))
     }
 
     package func shutdown() throws {
-        guard process.isRunning else {
+        guard !isClosed else {
             return
         }
 
-        _ = try? send(.init(command: "shutdown", fanIndex: nil, rpm: nil, fanIndices: nil))
-        stdinPipe.fileHandleForWriting.closeFile()
-        process.waitUntilExit()
+        _ = try? send(.init(command: .shutdown))
+        try closeConnection()
     }
 
     private func send(_ request: WriterRequest) throws -> WriterResponse {
-        guard process.isRunning else {
-            let stderr = String(data: (try? stderrPipe.fileHandleForReading.readToEnd()) ?? Data(), encoding: .utf8) ?? ""
-            throw AutomaticControlError.writer("writer process is not running. \(stderr.trimmingCharacters(in: .whitespacesAndNewlines))")
+        guard !isClosed else {
+            throw FanWriterError.daemonUnavailable(socketPath: socketPath, reason: "client session is already closed")
         }
 
-        let data = try encoder.encode(request)
-        stdinPipe.fileHandleForWriting.write(data)
-        stdinPipe.fileHandleForWriting.write(Data([0x0a]))
-
-        guard let line = try stdoutReader.readLine() else {
-            let stderr = String(data: (try? stderrPipe.fileHandleForReading.readToEnd()) ?? Data(), encoding: .utf8) ?? ""
-            throw AutomaticControlError.writer("writer closed its response pipe unexpectedly. \(stderr.trimmingCharacters(in: .whitespacesAndNewlines))")
+        do {
+            let data = try encoder.encode(request)
+            try LocalSocket.writeAll(data, to: descriptor)
+            try LocalSocket.writeAll(Data([0x0a]), to: descriptor)
+        } catch {
+            throw FanWriterError.daemonUnavailable(socketPath: socketPath, reason: "failed to send request: \(error.localizedDescription)")
         }
 
-        let response = try decoder.decode(WriterResponse.self, from: Data(line.utf8))
-        if response.ok {
-            return response
+        guard let line = try lineReader.readLine() else {
+            throw FanWriterError.daemonUnavailable(socketPath: socketPath, reason: "connection closed before a response was received")
         }
 
-        throw AutomaticControlError.writer(response.error ?? "unknown writer failure")
-    }
-}
-
-package struct WriterServiceCommand {
-    package init() {}
-
-    package func run() throws {
-        guard geteuid() == 0 else {
-            throw RuntimeCommandError("writer-service requires root privileges")
+        let response: WriterResponse
+        do {
+            response = try decoder.decode(WriterResponse.self, from: Data(line.utf8))
+        } catch {
+            throw FanWriterError.protocolViolation("failed to decode daemon response: \(error.localizedDescription)")
         }
 
-        let connection = try SMCConnection.open()
-        defer { connection.close() }
-
-        let signalMonitor = SignalMonitor()
-        defer { signalMonitor.stop() }
-
-        let encoder = JSONEncoder()
-        let decoder = JSONDecoder()
-        var managedFans = Set<Int>()
-
-        defer {
-            for fanIndex in managedFans.sorted() {
-                try? connection.restoreAutomaticMode(index: fanIndex)
-            }
+        guard response.ok else {
+            throw Self.mapError(from: response)
         }
-
-        while !signalMonitor.terminationRequested, let line = readLine(strippingNewline: true) {
-            let response: WriterResponse
-            do {
-                let request = try decoder.decode(WriterRequest.self, from: Data(line.utf8))
-                response = try handle(request: request, connection: connection, managedFans: &managedFans)
-            } catch {
-                response = WriterResponse(ok: false, error: error.localizedDescription, fans: nil)
-            }
-
-            let data = try encoder.encode(response)
-            FileHandle.standardOutput.write(data)
-            FileHandle.standardOutput.write(Data([0x0a]))
-        }
+        return response
     }
 
-    private func handle(
-        request: WriterRequest,
-        connection: SMCConnection,
-        managedFans: inout Set<Int>
-    ) throws -> WriterResponse {
-        switch request.command {
-        case "inspectFans":
-            let fans = try connection.readFans().map(CodableFanReading.init)
-            return WriterResponse(ok: true, error: nil, fans: fans)
-        case "applyTarget":
-            guard let fanIndex = request.fanIndex, let rpm = request.rpm else {
-                throw AutomaticControlError.writer("applyTarget requires fanIndex and rpm")
-            }
-            if !managedFans.contains(fanIndex) {
-                try connection.setFanManualMode(index: fanIndex)
-                managedFans.insert(fanIndex)
-            }
-            try connection.setFanTargetRPM(index: fanIndex, rpm: rpm)
-            return WriterResponse(ok: true, error: nil, fans: nil)
-        case "restoreAutomaticMode":
-            for fanIndex in request.fanIndices ?? [] {
-                try connection.restoreAutomaticMode(index: fanIndex)
-                managedFans.remove(fanIndex)
-            }
-            return WriterResponse(ok: true, error: nil, fans: nil)
-        case "shutdown":
-            for fanIndex in managedFans.sorted() {
-                try connection.restoreAutomaticMode(index: fanIndex)
-            }
-            managedFans.removeAll()
-            return WriterResponse(ok: true, error: nil, fans: nil)
+    private func closeConnection() throws {
+        guard !isClosed else {
+            return
+        }
+
+        isClosed = true
+        Darwin.shutdown(descriptor, SHUT_RDWR)
+        close(descriptor)
+    }
+
+    private static func mapError(from response: WriterResponse) -> Error {
+        switch response.errorCode {
+        case "conflict":
+            let fanIndex = response.errorMessage?
+                .split(separator: " ")
+                .compactMap { Int($0) }
+                .first ?? -1
+            return FanWriterError.conflict(fanIndex: fanIndex)
+        case "invalid_request":
+            return FanWriterError.invalidRequest(response.errorMessage ?? "unknown request failure")
+        case "protocol":
+            return FanWriterError.protocolViolation(response.errorMessage ?? "unknown protocol failure")
         default:
-            throw AutomaticControlError.writer("unknown writer command: \(request.command)")
+            return FanWriterError.daemonFailure(response.errorMessage ?? "unknown daemon failure")
         }
     }
 }
 
-struct RuntimeCommandError: LocalizedError {
-    let message: String
+package struct RuntimeCommandError: LocalizedError {
+    package let message: String
 
-    init(_ message: String) {
+    package init(_ message: String) {
         self.message = message
     }
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         message
     }
 }
 
-final class PipeLineReader {
-    private let handle: FileHandle
+package final class PipeLineReader {
+    private let descriptor: Int32
     private var buffer = Data()
 
-    init(handle: FileHandle) {
-        self.handle = handle
+    package init(descriptor: Int32) {
+        self.descriptor = descriptor
     }
 
-    func readLine() throws -> String? {
+    package func readLine() throws -> String? {
         while true {
             if let newlineIndex = buffer.firstIndex(of: 0x0a) {
                 let lineData = buffer.prefix(upTo: newlineIndex)
@@ -243,10 +244,12 @@ final class PipeLineReader {
                 return String(data: lineData, encoding: .utf8)
             }
 
-            guard let chunk = try handle.read(upToCount: 1), !chunk.isEmpty else {
+            let chunk = try LocalSocket.readChunk(from: descriptor, maxBytes: 4096)
+            if chunk.isEmpty {
                 if buffer.isEmpty {
                     return nil
                 }
+
                 defer { buffer.removeAll(keepingCapacity: true) }
                 return String(data: buffer, encoding: .utf8)
             }
