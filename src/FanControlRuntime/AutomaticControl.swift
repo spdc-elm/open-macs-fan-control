@@ -31,6 +31,7 @@ struct AutomaticControlConfig: Codable {
     let hysteresisRPM: Int
     let cpuDomain: ThermalDomainConfig
     let gpuDomain: ThermalDomainConfig
+    let memoryDomain: ThermalDomainConfig?
     let fans: [FanPolicyConfig]
 }
 
@@ -55,6 +56,7 @@ package struct ResolvedAutomaticControlConfig {
     package let hysteresisRPM: Int
     package let cpuDomain: ThermalDomainConfig
     package let gpuDomain: ThermalDomainConfig
+    package let memoryDomain: ThermalDomainConfig?
     package let fans: [ResolvedFanPolicy]
 }
 
@@ -69,11 +71,13 @@ package struct ResolvedFanPolicy {
 package struct DomainSnapshot {
     package let cpuTemperatureCelsius: Double
     package let gpuTemperatureCelsius: Double
+    package let memoryTemperatureCelsius: Double?
 }
 
 package struct FanDemandPlan: Equatable {
     package let cpuDemandRPM: Int
     package let gpuDemandRPM: Int
+    package let memoryDemandRPM: Int?
     package let requestedTargetRPM: Int
 }
 
@@ -158,9 +162,16 @@ package struct AutomaticControlResolver {
         let cpuReading = try resolveReading(named: config.cpuDomain.sensor, from: readings)
         let gpuReading = try resolveReading(named: config.gpuDomain.sensor, from: readings)
 
+        var memoryTemperature: Double? = nil
+        if let memoryDomain = config.memoryDomain {
+            let memoryReading = try resolveReading(named: memoryDomain.sensor, from: readings)
+            memoryTemperature = memoryReading.valueCelsius
+        }
+
         return DomainSnapshot(
             cpuTemperatureCelsius: cpuReading.valueCelsius,
-            gpuTemperatureCelsius: gpuReading.valueCelsius
+            gpuTemperatureCelsius: gpuReading.valueCelsius,
+            memoryTemperatureCelsius: memoryTemperature
         )
     }
 
@@ -187,10 +198,25 @@ package struct AutomaticControlResolver {
             fan: fan
         )
 
+        var memoryDemand: Int? = nil
+        if let memoryDomain = config.memoryDomain, let memoryTemp = snapshot.memoryTemperatureCelsius {
+            memoryDemand = DomainDemandCalculator.demandRPM(
+                temperatureCelsius: memoryTemp,
+                domain: memoryDomain,
+                fan: fan
+            )
+        }
+
+        var target = max(cpuDemand, gpuDemand)
+        if let memoryDemand {
+            target = max(target, memoryDemand)
+        }
+
         return FanDemandPlan(
             cpuDemandRPM: cpuDemand,
             gpuDemandRPM: gpuDemand,
-            requestedTargetRPM: max(cpuDemand, gpuDemand)
+            memoryDemandRPM: memoryDemand,
+            requestedTargetRPM: target
         )
     }
 }
@@ -233,6 +259,9 @@ package struct AutomaticControlBootstrap {
 
         try validateDomain(config.cpuDomain, label: "cpu")
         try validateDomain(config.gpuDomain, label: "gpu")
+        if let memoryDomain = config.memoryDomain {
+            try validateDomain(memoryDomain, label: "memory")
+        }
 
         let availableSensorNames = Set(inventory.refreshAll().map(\.rawName))
         guard availableSensorNames.contains(config.cpuDomain.sensor) else {
@@ -240,6 +269,11 @@ package struct AutomaticControlBootstrap {
         }
         guard availableSensorNames.contains(config.gpuDomain.sensor) else {
             throw AutomaticControlError.invalidConfig("gpuDomain.sensor references unknown sensor \(config.gpuDomain.sensor)")
+        }
+        if let memoryDomain = config.memoryDomain {
+            guard availableSensorNames.contains(memoryDomain.sensor) else {
+                throw AutomaticControlError.invalidConfig("memoryDomain.sensor references unknown sensor \(memoryDomain.sensor)")
+            }
         }
 
         let fanInventory = Dictionary(uniqueKeysWithValues: try writer.inspectFans().map { ($0.index, $0) })
@@ -282,6 +316,7 @@ package struct AutomaticControlBootstrap {
             hysteresisRPM: config.hysteresisRPM,
             cpuDomain: config.cpuDomain,
             gpuDomain: config.gpuDomain,
+            memoryDomain: config.memoryDomain,
             fans: resolvedFans
         )
     }

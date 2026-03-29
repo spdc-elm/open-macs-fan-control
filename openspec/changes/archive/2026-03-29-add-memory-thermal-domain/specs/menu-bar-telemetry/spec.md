@@ -1,8 +1,4 @@
-## Purpose
-
-Define the long-lived behavior for a macOS menu bar surface that exposes live aggregate CPU, GPU, and memory temperatures plus fan RPM telemetry at a glance without requiring the CLI to remain open.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Menu bar extra shows live thermal summary
 The system MUST provide a macOS menu bar extra that shows a compact live summary of aggregate CPU temperature, aggregate GPU temperature, aggregate memory temperature, and fan RPM telemetry, rendered as a custom multi-column image label via `ImageRenderer`.
@@ -23,20 +19,3 @@ The system MUST provide an expanded menu bar panel that shows the latest telemet
 - **WHEN** the user opens the menu bar extra
 - **THEN** the panel MUST show the latest available CPU average temperature, GPU average temperature, memory average temperature, and fan RPM readings
 - **AND** it MUST show enough context for the user to distinguish current values from unavailable values
-
-#### Scenario: User exits from the menu bar panel
-- **WHEN** the user chooses the app's quit action from the menu bar panel
-- **THEN** the menu bar app MUST terminate cleanly
-
-### Requirement: Menu bar telemetry refreshes automatically
-The system MUST refresh menu bar telemetry automatically while the menu bar app is running.
-
-#### Scenario: Refresh succeeds
-- **WHEN** the configured refresh interval elapses while the menu bar app is active
-- **THEN** the system MUST attempt a new telemetry snapshot
-- **AND** it MUST update the compact summary and expanded panel with the latest successful readings
-
-#### Scenario: Refresh fails after a prior success
-- **WHEN** a telemetry refresh attempt fails after the app has already shown a previous snapshot
-- **THEN** the system MUST preserve the last successful snapshot for display
-- **AND** it MUST indicate that current refresh data is unavailable or stale rather than presenting the failure as fresh live data

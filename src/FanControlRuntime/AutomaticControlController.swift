@@ -44,7 +44,7 @@ private enum AutomaticControlSessionError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .staleSensorTimeout:
-            return "required CPU/GPU domain sensor became stale"
+            return "required thermal domain sensor became stale"
         }
     }
 }

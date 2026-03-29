@@ -73,14 +73,15 @@ package struct TelemetrySnapshot {
     package let refreshedAt: Date
     package let cpuAverageCelsius: TelemetryValue<Double>
     package let gpuAverageCelsius: TelemetryValue<Double>
+    package let memoryAverageCelsius: TelemetryValue<Double>
     package let fanSummary: FanTelemetrySummary
 
     package var hasStaleSignals: Bool {
-        [cpuAverageCelsius.state, gpuAverageCelsius.state, fanSummary.state].contains(.stale)
+        [cpuAverageCelsius.state, gpuAverageCelsius.state, memoryAverageCelsius.state, fanSummary.state].contains(.stale)
     }
 
     package var hasUnavailableSignals: Bool {
-        [cpuAverageCelsius.state, gpuAverageCelsius.state, fanSummary.state].contains(.unavailable)
+        [cpuAverageCelsius.state, gpuAverageCelsius.state, memoryAverageCelsius.state, fanSummary.state].contains(.unavailable)
     }
 
     package static func unavailable(refreshedAt: Date) -> TelemetrySnapshot {
@@ -88,6 +89,7 @@ package struct TelemetrySnapshot {
             refreshedAt: refreshedAt,
             cpuAverageCelsius: .unavailable(),
             gpuAverageCelsius: .unavailable(),
+            memoryAverageCelsius: .unavailable(),
             fanSummary: .unavailable()
         )
     }
@@ -121,6 +123,12 @@ package struct TelemetrySnapshotBuilder {
                 temperatures: temperatures,
                 refreshedAt: refreshedAt,
                 previous: previousSnapshot?.gpuAverageCelsius
+            ),
+            memoryAverageCelsius: resolveTemperature(
+                rawName: "memory_average",
+                temperatures: temperatures,
+                refreshedAt: refreshedAt,
+                previous: previousSnapshot?.memoryAverageCelsius
             ),
             fanSummary: resolveFans(
                 fans: fans,

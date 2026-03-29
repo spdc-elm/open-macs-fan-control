@@ -12,6 +12,7 @@ private struct StatusItemLabelContent: View {
         HStack(spacing: 5) {
             column(title: "CPU", value: formatTemperature(snapshot.cpuAverageCelsius))
             column(title: "GPU", value: formatTemperature(snapshot.gpuAverageCelsius))
+            column(title: "Mem", value: formatTemperature(snapshot.memoryAverageCelsius))
             column(title: "Fan", value: formatFanSummary(snapshot.fanSummary))
 
             Circle()

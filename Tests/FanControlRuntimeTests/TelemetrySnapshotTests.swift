@@ -8,7 +8,8 @@ final class TelemetrySnapshotTests: XCTestCase {
             refreshedAt: refreshedAt,
             temperatures: [
                 UnifiedTemperatureReading(source: .aggregate, rawName: "cpu_core_average", displayName: "CPU", valueCelsius: 71.5, group: "CPU", type: "cpu", sortKey: "1"),
-                UnifiedTemperatureReading(source: .aggregate, rawName: "gpu_cluster_average", displayName: "GPU", valueCelsius: 63.0, group: "GPU", type: "gpu", sortKey: "2")
+                UnifiedTemperatureReading(source: .aggregate, rawName: "gpu_cluster_average", displayName: "GPU", valueCelsius: 63.0, group: "GPU", type: "gpu", sortKey: "2"),
+                UnifiedTemperatureReading(source: .aggregate, rawName: "memory_average", displayName: "Memory Average", valueCelsius: 34.5, group: "Memory", type: "memory", sortKey: "3")
             ],
             fans: [
                 FanReading(index: 0, currentRPM: 1800, minimumRPM: 1200, maximumRPM: 4000, targetRPM: nil, modeValue: 0),
@@ -20,6 +21,8 @@ final class TelemetrySnapshotTests: XCTestCase {
         XCTAssertEqual(snapshot.cpuAverageCelsius.value, 71.5)
         XCTAssertEqual(snapshot.gpuAverageCelsius.state, .live)
         XCTAssertEqual(snapshot.gpuAverageCelsius.value, 63.0)
+        XCTAssertEqual(snapshot.memoryAverageCelsius.state, .live)
+        XCTAssertEqual(snapshot.memoryAverageCelsius.value, 34.5)
         XCTAssertEqual(snapshot.fanSummary.state, .live)
         XCTAssertEqual(snapshot.fanSummary.averageCurrentRPM, 2000)
         XCTAssertEqual(snapshot.fanSummary.minimumCurrentRPM, 1800)
@@ -37,6 +40,8 @@ final class TelemetrySnapshotTests: XCTestCase {
         XCTAssertEqual(snapshot.cpuAverageCelsius.state, .unavailable)
         XCTAssertNil(snapshot.cpuAverageCelsius.value)
         XCTAssertEqual(snapshot.gpuAverageCelsius.state, .unavailable)
+        XCTAssertEqual(snapshot.memoryAverageCelsius.state, .unavailable)
+        XCTAssertNil(snapshot.memoryAverageCelsius.value)
         XCTAssertEqual(snapshot.fanSummary.state, .unavailable)
         XCTAssertTrue(snapshot.hasUnavailableSignals)
     }
@@ -46,7 +51,8 @@ final class TelemetrySnapshotTests: XCTestCase {
             refreshedAt: Date(timeIntervalSince1970: 100),
             temperatures: [
                 UnifiedTemperatureReading(source: .aggregate, rawName: "cpu_core_average", displayName: "CPU", valueCelsius: 70, group: "CPU", type: "cpu", sortKey: "1"),
-                UnifiedTemperatureReading(source: .aggregate, rawName: "gpu_cluster_average", displayName: "GPU", valueCelsius: 60, group: "GPU", type: "gpu", sortKey: "2")
+                UnifiedTemperatureReading(source: .aggregate, rawName: "gpu_cluster_average", displayName: "GPU", valueCelsius: 60, group: "GPU", type: "gpu", sortKey: "2"),
+                UnifiedTemperatureReading(source: .aggregate, rawName: "memory_average", displayName: "Memory Average", valueCelsius: 33, group: "Memory", type: "memory", sortKey: "3")
             ],
             fans: [
                 FanReading(index: 0, currentRPM: 1900, minimumRPM: 1200, maximumRPM: 4000, targetRPM: nil, modeValue: 0)
@@ -64,6 +70,8 @@ final class TelemetrySnapshotTests: XCTestCase {
         XCTAssertEqual(stale.cpuAverageCelsius.value, 70)
         XCTAssertEqual(stale.cpuAverageCelsius.lastUpdatedAt, previous.cpuAverageCelsius.lastUpdatedAt)
         XCTAssertEqual(stale.gpuAverageCelsius.state, .stale)
+        XCTAssertEqual(stale.memoryAverageCelsius.state, .stale)
+        XCTAssertEqual(stale.memoryAverageCelsius.value, 33)
         XCTAssertEqual(stale.fanSummary.state, .stale)
         XCTAssertEqual(stale.fanSummary.averageCurrentRPM, 1900)
         XCTAssertTrue(stale.hasStaleSignals)

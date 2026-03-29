@@ -71,7 +71,7 @@ final class AutomaticControlControllerTests: XCTestCase {
         try harness.waitForPhase(.failed)
 
         XCTAssertEqual(harness.runningWriter.restoreCalls, [0])
-        XCTAssertEqual(harness.service.status().lastError, "required CPU/GPU domain sensor became stale")
+        XCTAssertEqual(harness.service.status().lastError, "required thermal domain sensor became stale")
     }
 
     func testWriterFailureMarksControllerFailedAndRestoresAutomaticMode() throws {
@@ -113,6 +113,7 @@ final class AutomaticControlControllerTests: XCTestCase {
         let config = try harness.writeConfig(
             cpuSensor: "cpu_core_average",
             gpuSensor: "gpu_cluster_average",
+            memorySensor: "memory_average",
             pollingIntervalSeconds: 0.05,
             staleSensorTimeoutSeconds: 0.2
         )
@@ -181,10 +182,22 @@ private final class ControllerHarness {
     func writeConfig(
         cpuSensor: String,
         gpuSensor: String,
+        memorySensor: String? = nil,
         pollingIntervalSeconds: TimeInterval,
         staleSensorTimeoutSeconds: TimeInterval
     ) throws -> URL {
         let configURL = tempDirectory.appendingPathComponent(UUID().uuidString + ".json")
+        var memoryDomainJSON = ""
+        if let memorySensor {
+            memoryDomainJSON = """
+            ,
+              "memoryDomain": {
+                "sensor": "\(memorySensor)",
+                "startTemperatureCelsius": 45,
+                "maxTemperatureCelsius": 75
+              }
+            """
+        }
         let json = """
         {
           "pollingIntervalSeconds": \(pollingIntervalSeconds),
@@ -201,7 +214,7 @@ private final class ControllerHarness {
             "sensor": "\(gpuSensor)",
             "startTemperatureCelsius": 50,
             "maxTemperatureCelsius": 95
-          },
+          }\(memoryDomainJSON),
           "fans": [
             {
               "fanIndex": 0,
@@ -251,18 +264,27 @@ private final class WriterQueue: @unchecked Sendable {
 private struct FakeInventoryFactory {
     static let `default` = FakeInventoryFactory(
         cpuValues: [70],
-        gpuValues: [65]
+        gpuValues: [65],
+        memoryValues: [33]
     )
 
     let cpuValues: [Double?]
     let gpuValues: [Double?]
+    let memoryValues: [Double?]
+
+    init(cpuValues: [Double?], gpuValues: [Double?], memoryValues: [Double?] = [33]) {
+        self.cpuValues = cpuValues
+        self.gpuValues = gpuValues
+        self.memoryValues = memoryValues
+    }
 
     func makeInventory() -> TemperatureInventory {
         return TemperatureInventory(
             runtime: TemperatureRuntime(),
             sensors: [
                 FakeTemperatureSensor(values: cpuValues, rawName: "fake_cpu_sensor", displayName: "CPU", group: "CPU", type: "cpu", sortKey: "1"),
-                FakeTemperatureSensor(values: gpuValues, rawName: "fake_gpu_sensor", displayName: "GPU", group: "GPU", type: "gpu", sortKey: "2")
+                FakeTemperatureSensor(values: gpuValues, rawName: "fake_gpu_sensor", displayName: "GPU", group: "GPU", type: "gpu", sortKey: "2"),
+                FakeTemperatureSensor(values: memoryValues, rawName: "fake_memory_sensor", displayName: "Memory", group: "Memory", type: "memory", sortKey: "3")
             ]
         )
     }

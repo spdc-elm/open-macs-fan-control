@@ -76,6 +76,11 @@ struct AutomaticControlCommand {
         print("smoothingStepRPM=\(config.smoothingStepRPM) hysteresisRPM=\(config.hysteresisRPM)")
         print("cpuDomain: sensor=\(config.cpuDomain.sensor) start=\(config.cpuDomain.startTemperatureCelsius)C max=\(config.cpuDomain.maxTemperatureCelsius)C")
         print("gpuDomain: sensor=\(config.gpuDomain.sensor) start=\(config.gpuDomain.startTemperatureCelsius)C max=\(config.gpuDomain.maxTemperatureCelsius)C")
+        if let mem = config.memoryDomain {
+            print("memoryDomain: sensor=\(mem.sensor) start=\(mem.startTemperatureCelsius)C max=\(mem.maxTemperatureCelsius)C")
+        } else {
+            print("memoryDomain: not configured")
+        }
         for fan in config.fans {
             print(
                 "fan \(fan.fanIndex): policyMin=\(fan.minimumRPM) policyMax=\(fan.maximumRPM) hardwareMin=\(fan.hardwareMinimumRPM) hardwareMax=\(fan.hardwareMaximumRPM)"

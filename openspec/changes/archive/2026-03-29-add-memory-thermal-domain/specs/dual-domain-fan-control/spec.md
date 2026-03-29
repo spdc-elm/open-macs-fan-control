@@ -1,8 +1,4 @@
-## Purpose
-
-Define the long-lived behavior for config-driven automatic fan control that evaluates CPU, GPU, and optionally memory thermal demand together, applies smoothed/throttled fan targets, and fails safe back to automatic mode.
-
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Memory average aggregate sensor is available
 The system MUST compute a `memory_average` aggregate temperature reading by averaging all base readings with `type == "memory"`.
@@ -33,6 +29,8 @@ The system MUST support an optional `memoryDomain` in the automatic-control conf
 - **THEN** the system MUST behave identically to the existing dual-domain model (`max(cpuDemand, gpuDemand)`)
 - **AND** no memory-related validation or resolution MUST occur
 
+## MODIFIED Requirements
+
 ### Requirement: Config-driven dual-domain control settings
 The system MUST load and validate automatic fan-control settings through the controller-managed control session, including CPU domain, GPU domain, optional memory domain, threshold ranges, fan policy, and polling settings.
 
@@ -62,25 +60,6 @@ The system MUST evaluate CPU, GPU, and (when configured) memory thermal demand s
 - **WHEN** the memory domain is configured and the computed memory-domain target RPM is the highest among all configured domains
 - **THEN** the system MUST use the memory-domain target as the requested fan target for that control cycle
 
-### Requirement: Automatic control smooths and throttles fan writes
-The system MUST avoid writing a freshly computed target RPM directly on every polling cycle and MUST apply smoothing and write throttling before issuing fan updates.
-
-#### Scenario: Target changes within the active threshold band
-- **WHEN** domain temperatures move within their configured threshold ranges
-- **THEN** the system MUST move the commanded fan target toward the requested RPM gradually rather than jumping immediately to each newly computed value
-
-#### Scenario: Writes would occur too frequently
-- **WHEN** a newly computed target would cause overly frequent low-level fan writes without a meaningful control change
-- **THEN** the system MUST defer or suppress that write until its throttling rules allow another update
-
-### Requirement: Low-level fan writes stay behind a privileged writer boundary
-The system MUST perform low-level manual-mode changes, target RPM writes, and automatic-mode restoration for automatic control through a dedicated root writer daemon boundary rather than inside the main control logic.
-
-#### Scenario: Control loop applies a new target
-- **WHEN** the unprivileged controller decides that a managed fan needs a new target RPM
-- **THEN** it MUST issue that request through its root writer daemon session
-- **AND** the daemon MUST perform the low-level write operation
-
 ### Requirement: Automatic control fails safe back to automatic mode
 The system MUST relinquish manual fan control when the controller cannot continue safe automatic control.
 
@@ -88,7 +67,3 @@ The system MUST relinquish manual fan control when the controller cannot continu
 - **WHEN** the configured CPU, GPU, or memory domain cannot be refreshed reliably during automatic control
 - **THEN** the controller MUST stop issuing new manual targets for the affected control session
 - **AND** it MUST request restoration of automatic fan mode for managed fans
-
-#### Scenario: Controller shutdown or writer failure is handled
-- **WHEN** the active automatic-control session ends through a handled controller shutdown, controlled restart, or privileged-writer failure
-- **THEN** the controller MUST attempt to restore automatic fan mode for managed fans before declaring the session stopped or failed

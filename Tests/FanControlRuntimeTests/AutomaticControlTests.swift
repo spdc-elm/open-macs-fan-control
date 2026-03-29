@@ -6,24 +6,51 @@ final class AutomaticControlTests: XCTestCase {
         let config = makeResolvedConfig()
         let resolver = AutomaticControlResolver(config: config)
         let plan = resolver.demandPlan(
-            for: DomainSnapshot(cpuTemperatureCelsius: 85, gpuTemperatureCelsius: 62),
+            for: DomainSnapshot(cpuTemperatureCelsius: 85, gpuTemperatureCelsius: 62, memoryTemperatureCelsius: nil),
             fan: config.fans[0]
         )
 
         XCTAssertGreaterThan(plan.cpuDemandRPM, plan.gpuDemandRPM)
         XCTAssertEqual(plan.requestedTargetRPM, plan.cpuDemandRPM)
+        XCTAssertNil(plan.memoryDemandRPM)
     }
 
     func testGpuDemandDominatesRequestedTarget() {
         let config = makeResolvedConfig()
         let resolver = AutomaticControlResolver(config: config)
         let plan = resolver.demandPlan(
-            for: DomainSnapshot(cpuTemperatureCelsius: 60, gpuTemperatureCelsius: 88),
+            for: DomainSnapshot(cpuTemperatureCelsius: 60, gpuTemperatureCelsius: 88, memoryTemperatureCelsius: nil),
             fan: config.fans[0]
         )
 
         XCTAssertGreaterThan(plan.gpuDemandRPM, plan.cpuDemandRPM)
         XCTAssertEqual(plan.requestedTargetRPM, plan.gpuDemandRPM)
+    }
+
+    func testMemoryDemandDominatesRequestedTarget() {
+        let config = makeResolvedConfig(withMemoryDomain: true)
+        let resolver = AutomaticControlResolver(config: config)
+        let plan = resolver.demandPlan(
+            for: DomainSnapshot(cpuTemperatureCelsius: 50, gpuTemperatureCelsius: 48, memoryTemperatureCelsius: 72),
+            fan: config.fans[0]
+        )
+
+        XCTAssertNotNil(plan.memoryDemandRPM)
+        XCTAssertGreaterThan(plan.memoryDemandRPM!, plan.cpuDemandRPM)
+        XCTAssertGreaterThan(plan.memoryDemandRPM!, plan.gpuDemandRPM)
+        XCTAssertEqual(plan.requestedTargetRPM, plan.memoryDemandRPM)
+    }
+
+    func testMemoryDomainAbsentDoesNotAffectTarget() {
+        let config = makeResolvedConfig(withMemoryDomain: false)
+        let resolver = AutomaticControlResolver(config: config)
+        let plan = resolver.demandPlan(
+            for: DomainSnapshot(cpuTemperatureCelsius: 70, gpuTemperatureCelsius: 65, memoryTemperatureCelsius: nil),
+            fan: config.fans[0]
+        )
+
+        XCTAssertNil(plan.memoryDemandRPM)
+        XCTAssertEqual(plan.requestedTargetRPM, max(plan.cpuDemandRPM, plan.gpuDemandRPM))
     }
 
     func testSmoothingAndWriteThrottleSuppressChatter() {
@@ -61,6 +88,22 @@ final class AutomaticControlTests: XCTestCase {
         let snapshot = try resolver.resolveSnapshot(from: readings)
         XCTAssertEqual(snapshot.cpuTemperatureCelsius, 72)
         XCTAssertEqual(snapshot.gpuTemperatureCelsius, 68)
+        XCTAssertNil(snapshot.memoryTemperatureCelsius)
+    }
+
+    func testResolveSnapshotIncludesMemoryWhenConfigured() throws {
+        let config = makeResolvedConfig(withMemoryDomain: true)
+        let resolver = AutomaticControlResolver(config: config)
+        let readings = [
+            UnifiedTemperatureReading(source: .aggregate, rawName: "cpu_core_average", displayName: "CPU", valueCelsius: 72, group: "CPU", type: "cpu", sortKey: "1"),
+            UnifiedTemperatureReading(source: .aggregate, rawName: "gpu_cluster_average", displayName: "GPU", valueCelsius: 68, group: "GPU", type: "gpu", sortKey: "2"),
+            UnifiedTemperatureReading(source: .aggregate, rawName: "memory_average", displayName: "Memory", valueCelsius: 35, group: "Memory", type: "memory", sortKey: "3")
+        ]
+
+        let snapshot = try resolver.resolveSnapshot(from: readings)
+        XCTAssertEqual(snapshot.cpuTemperatureCelsius, 72)
+        XCTAssertEqual(snapshot.gpuTemperatureCelsius, 68)
+        XCTAssertEqual(snapshot.memoryTemperatureCelsius, 35)
     }
 
     func testResolveSnapshotRejectsAmbiguousConfiguredSensor() {
@@ -79,7 +122,7 @@ final class AutomaticControlTests: XCTestCase {
         }
     }
 
-    private func makeResolvedConfig() -> ResolvedAutomaticControlConfig {
+    private func makeResolvedConfig(withMemoryDomain: Bool = false) -> ResolvedAutomaticControlConfig {
         ResolvedAutomaticControlConfig(
             sourcePath: "/tmp/test.json",
             pollingIntervalSeconds: 1,
@@ -89,6 +132,7 @@ final class AutomaticControlTests: XCTestCase {
             hysteresisRPM: 100,
             cpuDomain: ThermalDomainConfig(sensor: "cpu_core_average", startTemperatureCelsius: 55, maxTemperatureCelsius: 90),
             gpuDomain: ThermalDomainConfig(sensor: "gpu_cluster_average", startTemperatureCelsius: 50, maxTemperatureCelsius: 95),
+            memoryDomain: withMemoryDomain ? ThermalDomainConfig(sensor: "memory_average", startTemperatureCelsius: 45, maxTemperatureCelsius: 75) : nil,
             fans: [
                 ResolvedFanPolicy(
                     fanIndex: 0,

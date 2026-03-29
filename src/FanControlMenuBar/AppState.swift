@@ -135,6 +135,7 @@ struct MenuBarPanel: View {
             VStack(alignment: .leading, spacing: 8) {
                 detailRow(title: "CPU average", value: formatTemperature(store.snapshot.cpuAverageCelsius))
                 detailRow(title: "GPU average", value: formatTemperature(store.snapshot.gpuAverageCelsius))
+                detailRow(title: "Memory average", value: formatTemperature(store.snapshot.memoryAverageCelsius))
                 detailRow(title: "Fan summary", value: formatFanSummary(store.snapshot.fanSummary))
             }
 

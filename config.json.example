@@ -14,6 +14,11 @@
     "startTemperatureCelsius": 65,
     "maxTemperatureCelsius": 80
   },
+  "memoryDomain": {
+    "sensor": "memory_average",
+    "startTemperatureCelsius": 55,
+    "maxTemperatureCelsius": 75
+  },
   "fans": [
     {
       "fanIndex": 0,

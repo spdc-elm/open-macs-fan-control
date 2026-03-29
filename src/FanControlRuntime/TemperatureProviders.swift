@@ -117,6 +117,7 @@ private enum AggregateRule: CaseIterable {
     case cpuPerformanceCoresAverage
     case cpuCoreAverage
     case gpuClusterAverage
+    case memoryAverage
 
     var rawName: String {
         switch self {
@@ -128,6 +129,8 @@ private enum AggregateRule: CaseIterable {
             return "cpu_core_average"
         case .gpuClusterAverage:
             return "gpu_cluster_average"
+        case .memoryAverage:
+            return "memory_average"
         }
     }
 
@@ -141,6 +144,8 @@ private enum AggregateRule: CaseIterable {
             return "CPU Core Average"
         case .gpuClusterAverage:
             return "GPU Cluster Average"
+        case .memoryAverage:
+            return "Memory Average"
         }
     }
 
@@ -148,6 +153,8 @@ private enum AggregateRule: CaseIterable {
         switch self {
         case .gpuClusterAverage:
             return "GPU"
+        case .memoryAverage:
+            return "Memory"
         default:
             return "CPU"
         }
@@ -157,6 +164,8 @@ private enum AggregateRule: CaseIterable {
         switch self {
         case .gpuClusterAverage:
             return "gpu"
+        case .memoryAverage:
+            return "memory"
         default:
             return "cpu"
         }
@@ -172,6 +181,8 @@ private enum AggregateRule: CaseIterable {
             return "0-aggregate-cpu-core"
         case .gpuClusterAverage:
             return "0-aggregate-gpu-cluster"
+        case .memoryAverage:
+            return "0-aggregate-memory"
         }
     }
 
@@ -202,6 +213,8 @@ private enum AggregateRule: CaseIterable {
             } else {
                 matching = readings.filter { $0.source == .gpu }
             }
+        case .memoryAverage:
+            matching = readings.filter { $0.type == "memory" }
         }
 
         guard !matching.isEmpty else {
