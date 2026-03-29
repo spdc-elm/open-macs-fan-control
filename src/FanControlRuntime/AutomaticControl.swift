@@ -23,16 +23,16 @@ enum AutomaticControlError: LocalizedError {
     }
 }
 
-struct AutomaticControlConfig: Codable {
-    let pollingIntervalSeconds: TimeInterval
-    let minimumWriteIntervalSeconds: TimeInterval
-    let staleSensorTimeoutSeconds: TimeInterval
-    let smoothingStepRPM: Int
-    let hysteresisRPM: Int
-    let cpuDomain: ThermalDomainConfig
-    let gpuDomain: ThermalDomainConfig
-    let memoryDomain: ThermalDomainConfig?
-    let fans: [FanPolicyConfig]
+package struct AutomaticControlConfig: Codable {
+    package let pollingIntervalSeconds: TimeInterval
+    package let minimumWriteIntervalSeconds: TimeInterval
+    package let staleSensorTimeoutSeconds: TimeInterval
+    package let smoothingStepRPM: Int
+    package let hysteresisRPM: Int
+    package let cpuDomain: ThermalDomainConfig
+    package let gpuDomain: ThermalDomainConfig
+    package let memoryDomain: ThermalDomainConfig?
+    package let fans: [FanPolicyConfig]
 }
 
 package struct ThermalDomainConfig: Codable {
@@ -41,10 +41,10 @@ package struct ThermalDomainConfig: Codable {
     package let maxTemperatureCelsius: Double
 }
 
-struct FanPolicyConfig: Codable {
-    let fanIndex: Int
-    let minimumRPM: Int
-    let maximumRPM: Int
+package struct FanPolicyConfig: Codable {
+    package let fanIndex: Int
+    package let minimumRPM: Int
+    package let maximumRPM: Int
 }
 
 package struct ResolvedAutomaticControlConfig {
@@ -231,10 +231,11 @@ package struct AutomaticControlBootstrap {
     }
 
     package func loadResolvedConfig(from path: String) throws -> ResolvedAutomaticControlConfig {
-        let data = try Data(contentsOf: URL(fileURLWithPath: path))
+        let absolutePath = URL(fileURLWithPath: path).standardizedFileURL.path
+        let data = try Data(contentsOf: URL(fileURLWithPath: absolutePath))
         let decoder = JSONDecoder()
         let rawConfig = try decoder.decode(AutomaticControlConfig.self, from: data)
-        return try resolve(config: rawConfig, sourcePath: path)
+        return try resolve(config: rawConfig, sourcePath: absolutePath)
     }
 
     private func resolve(config: AutomaticControlConfig, sourcePath: String) throws -> ResolvedAutomaticControlConfig {

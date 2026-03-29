@@ -39,11 +39,13 @@ final class MenuBarTelemetryStore: ObservableObject {
 final class MenuBarControllerStore: ObservableObject {
     @Published private(set) var status = AutomaticControlStatusSnapshot.idle()
     @Published private(set) var errorMessage: String?
+    @Published private(set) var activeConfig: AutomaticControlConfig?
 
     private let refreshInterval: TimeInterval
     private let launcher: AutomaticControlControllerLauncher
     private var timer: Timer?
     private let lastConfigKey = "menu-bar.last-controller-config"
+    private var cachedConfigPath: String?
 
     init(
         refreshInterval: TimeInterval = 2,
@@ -65,8 +67,30 @@ final class MenuBarControllerStore: ObservableObject {
             if let configPath = status.activeConfigPath {
                 UserDefaults.standard.set(configPath, forKey: lastConfigKey)
             }
+            refreshActiveConfig()
         } catch {
             self.errorMessage = error.localizedDescription
+        }
+    }
+
+    private func refreshActiveConfig() {
+        guard let configPath = status.activeConfigPath, status.phase == .running else {
+            activeConfig = nil
+            cachedConfigPath = nil
+            return
+        }
+
+        if configPath == cachedConfigPath, activeConfig != nil {
+            return
+        }
+
+        do {
+            let data = try Data(contentsOf: URL(fileURLWithPath: configPath))
+            activeConfig = try JSONDecoder().decode(AutomaticControlConfig.self, from: data)
+            cachedConfigPath = configPath
+        } catch {
+            activeConfig = nil
+            cachedConfigPath = nil
         }
     }
 
@@ -83,6 +107,9 @@ final class MenuBarControllerStore: ObservableObject {
             errorMessage = "No active controller config to reload."
             return
         }
+
+        cachedConfigPath = nil
+        activeConfig = nil
 
         runControlAction {
             let client = try AutomaticControlControllerClient.connect()
@@ -153,6 +180,11 @@ struct MenuBarPanel: View {
                 }
             }
 
+            if controllerStore.status.phase == .running, let config = controllerStore.activeConfig {
+                Divider()
+                controlRulesSection(config: config)
+            }
+
             if !store.snapshot.fanSummary.fans.isEmpty {
                 Divider()
 
@@ -207,6 +239,39 @@ struct MenuBarPanel: View {
         }
         .padding(16)
         .frame(minWidth: 460)
+    }
+
+    private func controlRulesSection(config: AutomaticControlConfig) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Control rules")
+                .font(.headline)
+
+            let fans = config.fans
+            domainRuleRows(label: "CPU", domain: config.cpuDomain, fans: fans)
+            domainRuleRows(label: "GPU", domain: config.gpuDomain, fans: fans)
+            if let memoryDomain = config.memoryDomain {
+                domainRuleRows(label: "Mem", domain: memoryDomain, fans: fans)
+            }
+        }
+    }
+
+    private func domainRuleRows(label: String, domain: ThermalDomainConfig, fans: [FanPolicyConfig]) -> some View {
+        let startTemp = String(format: "%.0f", domain.startTemperatureCelsius)
+        let maxTemp = String(format: "%.0f", domain.maxTemperatureCelsius)
+
+        return Group {
+            if fans.count <= 1 {
+                let fan = fans.first
+                let rpmRange = fan.map { "\($0.minimumRPM)–\($0.maximumRPM) rpm" } ?? ""
+                Text("\(label)  \(domain.sensor)  \(startTemp)–\(maxTemp) °C → \(rpmRange)")
+                    .font(.caption.monospaced())
+            } else {
+                ForEach(Array(fans.enumerated()), id: \.offset) { _, fan in
+                    Text("\(label)  \(domain.sensor)  \(startTemp)–\(maxTemp) °C → Fan \(fan.fanIndex): \(fan.minimumRPM)–\(fan.maximumRPM) rpm")
+                        .font(.caption.monospaced())
+                }
+            }
+        }
     }
 
     private func detailRow(title: String, value: String) -> some View {
