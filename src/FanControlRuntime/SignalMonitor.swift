@@ -1,10 +1,10 @@
 import Foundation
 
-final class SignalMonitor {
+package final class SignalMonitor {
     private var sources: [DispatchSourceSignal] = []
-    private(set) var terminationRequested = false
+    package private(set) var terminationRequested = false
 
-    init() {
+    package init() {
         signal(SIGINT, SIG_IGN)
         signal(SIGTERM, SIG_IGN)
 
@@ -18,7 +18,7 @@ final class SignalMonitor {
         }
     }
 
-    func stop() {
+    package func stop() {
         for source in sources {
             source.cancel()
         }

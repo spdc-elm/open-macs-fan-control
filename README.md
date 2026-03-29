@@ -1,6 +1,12 @@
 # macs-fan-control
 
-Terminal-first Swift prototype for exploring fan control and thermal sensor behavior on macOS, with a current focus on Apple Silicon temperature sources and multi-provider modeling.
+Swift macOS fan-control workspace organized around a shared runtime (`FanControlRuntime`) plus a CLI client (`fan-control-cli`), with room for future GUI/menu bar surfaces over the same core APIs.
+
+## Current architecture
+
+- `FanControlRuntime` owns reusable hardware access, telemetry assembly, configuration loading, and control-support logic.
+- `fan-control-cli` is a thin command-line shell over that runtime.
+- Future GUI/menu bar work should depend on `FanControlRuntime` directly rather than shelling out to the CLI.
 
 ## Current temperature model
 
@@ -8,6 +14,13 @@ Terminal-first Swift prototype for exploring fan control and thermal sensor beha
 - SMC temperature keys are read as another provider.
 - Aggregate sensors such as CPU/GPU averages are computed on top of the unified readings.
 - Disk remains a reserved provider slot for later SMART/NVMe work.
+
+## Current CLI surface
+
+- `swift run fan-control-cli temps [--friendly|--raw]`
+- `swift run fan-control-cli fans`
+- `swift run fan-control-cli auto --config <path> [--dry-run]`
+- `sudo swift run fan-control-cli write --fan <index> --rpm <target>`
 
 ## Reference work
 

@@ -1,9 +1,9 @@
 {
-  "pollingIntervalSeconds": 2,
-  "minimumWriteIntervalSeconds": 5,
+  "pollingIntervalSeconds": 1,
+  "minimumWriteIntervalSeconds": 2,
   "staleSensorTimeoutSeconds": 10,
-  "smoothingStepRPM": 300,
-  "hysteresisRPM": 100,
+  "smoothingStepRPM": 800,
+  "hysteresisRPM": 75,
   "cpuDomain": {
     "sensor": "cpu_core_average",
     "startTemperatureCelsius": 65,

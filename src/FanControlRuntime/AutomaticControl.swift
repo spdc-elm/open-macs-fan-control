@@ -23,11 +23,6 @@ enum AutomaticControlError: LocalizedError {
     }
 }
 
-struct AutomaticControlOptions {
-    let configPath: String
-    let dryRun: Bool
-}
-
 struct AutomaticControlConfig: Codable {
     let pollingIntervalSeconds: TimeInterval
     let minimumWriteIntervalSeconds: TimeInterval
@@ -39,10 +34,10 @@ struct AutomaticControlConfig: Codable {
     let fans: [FanPolicyConfig]
 }
 
-struct ThermalDomainConfig: Codable {
-    let sensor: String
-    let startTemperatureCelsius: Double
-    let maxTemperatureCelsius: Double
+package struct ThermalDomainConfig: Codable {
+    package let sensor: String
+    package let startTemperatureCelsius: Double
+    package let maxTemperatureCelsius: Double
 }
 
 struct FanPolicyConfig: Codable {
@@ -51,42 +46,47 @@ struct FanPolicyConfig: Codable {
     let maximumRPM: Int
 }
 
-struct ResolvedAutomaticControlConfig {
-    let sourcePath: String
-    let pollingIntervalSeconds: TimeInterval
-    let minimumWriteIntervalSeconds: TimeInterval
-    let staleSensorTimeoutSeconds: TimeInterval
-    let smoothingStepRPM: Int
-    let hysteresisRPM: Int
-    let cpuDomain: ThermalDomainConfig
-    let gpuDomain: ThermalDomainConfig
-    let fans: [ResolvedFanPolicy]
+package struct ResolvedAutomaticControlConfig {
+    package let sourcePath: String
+    package let pollingIntervalSeconds: TimeInterval
+    package let minimumWriteIntervalSeconds: TimeInterval
+    package let staleSensorTimeoutSeconds: TimeInterval
+    package let smoothingStepRPM: Int
+    package let hysteresisRPM: Int
+    package let cpuDomain: ThermalDomainConfig
+    package let gpuDomain: ThermalDomainConfig
+    package let fans: [ResolvedFanPolicy]
 }
 
-struct ResolvedFanPolicy {
-    let fanIndex: Int
-    let minimumRPM: Int
-    let maximumRPM: Int
-    let hardwareMinimumRPM: Int
-    let hardwareMaximumRPM: Int
+package struct ResolvedFanPolicy {
+    package let fanIndex: Int
+    package let minimumRPM: Int
+    package let maximumRPM: Int
+    package let hardwareMinimumRPM: Int
+    package let hardwareMaximumRPM: Int
 }
 
-struct DomainSnapshot {
-    let cpuTemperatureCelsius: Double
-    let gpuTemperatureCelsius: Double
+package struct DomainSnapshot {
+    package let cpuTemperatureCelsius: Double
+    package let gpuTemperatureCelsius: Double
 }
 
-struct FanDemandPlan: Equatable {
-    let cpuDemandRPM: Int
-    let gpuDemandRPM: Int
-    let requestedTargetRPM: Int
+package struct FanDemandPlan: Equatable {
+    package let cpuDemandRPM: Int
+    package let gpuDemandRPM: Int
+    package let requestedTargetRPM: Int
 }
 
-struct FanControlState {
-    var lastAppliedRPM: Int?
-    var lastWriteAt: Date?
+package struct FanControlState {
+    package var lastAppliedRPM: Int?
+    package var lastWriteAt: Date?
 
-    mutating func nextWriteTarget(
+    package init(lastAppliedRPM: Int? = nil, lastWriteAt: Date? = nil) {
+        self.lastAppliedRPM = lastAppliedRPM
+        self.lastWriteAt = lastWriteAt
+    }
+
+    package mutating func nextWriteTarget(
         requestedRPM: Int,
         now: Date,
         smoothingStepRPM: Int,
@@ -117,7 +117,7 @@ struct FanControlState {
         return candidate
     }
 
-    mutating func recordWrite(targetRPM: Int, at date: Date) {
+    package mutating func recordWrite(targetRPM: Int, at date: Date) {
         lastAppliedRPM = targetRPM
         lastWriteAt = date
     }
@@ -147,10 +147,14 @@ enum DomainDemandCalculator {
     }
 }
 
-struct AutomaticControlResolver {
-    let config: ResolvedAutomaticControlConfig
+package struct AutomaticControlResolver {
+    package let config: ResolvedAutomaticControlConfig
 
-    func resolveSnapshot(from readings: [UnifiedTemperatureReading]) throws -> DomainSnapshot {
+    package init(config: ResolvedAutomaticControlConfig) {
+        self.config = config
+    }
+
+    package func resolveSnapshot(from readings: [UnifiedTemperatureReading]) throws -> DomainSnapshot {
         let cpuReading = try resolveReading(named: config.cpuDomain.sensor, from: readings)
         let gpuReading = try resolveReading(named: config.gpuDomain.sensor, from: readings)
 
@@ -171,7 +175,7 @@ struct AutomaticControlResolver {
         return matches[0]
     }
 
-    func demandPlan(for snapshot: DomainSnapshot, fan: ResolvedFanPolicy) -> FanDemandPlan {
+    package func demandPlan(for snapshot: DomainSnapshot, fan: ResolvedFanPolicy) -> FanDemandPlan {
         let cpuDemand = DomainDemandCalculator.demandRPM(
             temperatureCelsius: snapshot.cpuTemperatureCelsius,
             domain: config.cpuDomain,
@@ -191,11 +195,16 @@ struct AutomaticControlResolver {
     }
 }
 
-struct AutomaticControlBootstrap {
-    let inventory: TemperatureInventory
-    let writer: any PrivilegedFanWriter
+package struct AutomaticControlBootstrap {
+    package let inventory: TemperatureInventory
+    package let writer: any PrivilegedFanWriter
 
-    func loadResolvedConfig(from path: String) throws -> ResolvedAutomaticControlConfig {
+    package init(inventory: TemperatureInventory, writer: any PrivilegedFanWriter) {
+        self.inventory = inventory
+        self.writer = writer
+    }
+
+    package func loadResolvedConfig(from path: String) throws -> ResolvedAutomaticControlConfig {
         let data = try Data(contentsOf: URL(fileURLWithPath: path))
         let decoder = JSONDecoder()
         let rawConfig = try decoder.decode(AutomaticControlConfig.self, from: data)
@@ -286,123 +295,6 @@ struct AutomaticControlBootstrap {
         }
         guard domain.maxTemperatureCelsius > domain.startTemperatureCelsius else {
             throw AutomaticControlError.invalidConfig("\(label)Domain.maxTemperatureCelsius must be > startTemperatureCelsius")
-        }
-    }
-}
-
-struct AutomaticControlCommand {
-    let options: AutomaticControlOptions
-
-    func run() throws {
-        let inventory = TemperatureInventory.loadDefault()
-        let writer = try HelperFanWriterClient.launch(executablePath: CommandLine.arguments[0])
-        defer {
-            try? writer.shutdown()
-        }
-
-        let bootstrap = AutomaticControlBootstrap(inventory: inventory, writer: writer)
-        let config = try bootstrap.loadResolvedConfig(from: options.configPath)
-
-        printResolvedConfiguration(config)
-        if options.dryRun {
-            print("dry-run complete; no fan overrides were issued")
-            return
-        }
-
-        try runLoop(config: config, inventory: inventory, writer: writer)
-    }
-
-    private func runLoop(
-        config: ResolvedAutomaticControlConfig,
-        inventory: TemperatureInventory,
-        writer: any PrivilegedFanWriter
-    ) throws {
-        print("starting automatic control; press Ctrl-C for handled shutdown")
-
-        let signalMonitor = SignalMonitor()
-        defer { signalMonitor.stop() }
-
-        let resolver = AutomaticControlResolver(config: config)
-        var fanStates = Dictionary(uniqueKeysWithValues: config.fans.map { ($0.fanIndex, FanControlState()) })
-        var lastSuccessfulSampleAt = Date()
-
-        do {
-            while true {
-                RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.05))
-                if signalMonitor.terminationRequested {
-                    print("received handled termination signal; restoring automatic mode")
-                    break
-                }
-
-                let readings = inventory.refreshAll()
-                if let snapshot = try? resolver.resolveSnapshot(from: readings) {
-                    lastSuccessfulSampleAt = Date()
-                    try applyCycle(
-                        config: config,
-                        snapshot: snapshot,
-                        resolver: resolver,
-                        fanStates: &fanStates,
-                        writer: writer
-                    )
-                } else if Date().timeIntervalSince(lastSuccessfulSampleAt) >= config.staleSensorTimeoutSeconds {
-                    throw AutomaticControlError.unavailableSensor("required CPU/GPU domain sensor became stale")
-                }
-
-                Thread.sleep(forTimeInterval: config.pollingIntervalSeconds)
-            }
-        } catch {
-            try? writer.restoreAutomaticMode(fanIndices: config.fans.map(\.fanIndex))
-            throw error
-        }
-
-        try writer.restoreAutomaticMode(fanIndices: config.fans.map(\.fanIndex))
-        print("restored automatic mode for managed fans")
-    }
-
-    private func applyCycle(
-        config: ResolvedAutomaticControlConfig,
-        snapshot: DomainSnapshot,
-        resolver: AutomaticControlResolver,
-        fanStates: inout [Int: FanControlState],
-        writer: any PrivilegedFanWriter
-    ) throws {
-        let now = Date()
-
-        for fan in config.fans {
-            let plan = resolver.demandPlan(for: snapshot, fan: fan)
-            var state = fanStates[fan.fanIndex] ?? FanControlState()
-            guard let targetRPM = state.nextWriteTarget(
-                requestedRPM: plan.requestedTargetRPM,
-                now: now,
-                smoothingStepRPM: config.smoothingStepRPM,
-                hysteresisRPM: config.hysteresisRPM,
-                minimumWriteInterval: config.minimumWriteIntervalSeconds
-            ) else {
-                fanStates[fan.fanIndex] = state
-                continue
-            }
-
-            try writer.applyTarget(fanIndex: fan.fanIndex, rpm: targetRPM)
-            state.recordWrite(targetRPM: targetRPM, at: now)
-            fanStates[fan.fanIndex] = state
-
-            print(
-                "fan \(fan.fanIndex): cpu=\(plan.cpuDemandRPM)rpm gpu=\(plan.gpuDemandRPM)rpm target=\(plan.requestedTargetRPM)rpm applied=\(targetRPM)rpm"
-            )
-        }
-    }
-
-    private func printResolvedConfiguration(_ config: ResolvedAutomaticControlConfig) {
-        print("# Automatic control initialization")
-        print("config: \(config.sourcePath)")
-        print("pollingIntervalSeconds=\(config.pollingIntervalSeconds) minimumWriteIntervalSeconds=\(config.minimumWriteIntervalSeconds) staleSensorTimeoutSeconds=\(config.staleSensorTimeoutSeconds)")
-        print("smoothingStepRPM=\(config.smoothingStepRPM) hysteresisRPM=\(config.hysteresisRPM)")
-        print("cpuDomain: sensor=\(config.cpuDomain.sensor) start=\(config.cpuDomain.startTemperatureCelsius)C max=\(config.cpuDomain.maxTemperatureCelsius)C")
-        print("gpuDomain: sensor=\(config.gpuDomain.sensor) start=\(config.gpuDomain.startTemperatureCelsius)C max=\(config.gpuDomain.maxTemperatureCelsius)C")
-        for fan in config.fans {
-            print(
-                "fan \(fan.fanIndex): policyMin=\(fan.minimumRPM) policyMax=\(fan.maximumRPM) hardwareMin=\(fan.hardwareMinimumRPM) hardwareMax=\(fan.hardwareMaximumRPM)"
-            )
         }
     }
 }

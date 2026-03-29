@@ -1,4 +1,5 @@
 import Foundation
+import FanControlRuntime
 
 struct CLI {
     let arguments: [String]
@@ -126,13 +127,13 @@ struct CLI {
 
     private func usage() -> String {
         """
-        fancontrol-mvp: terminal-first hardware validation tool
+        fan-control-cli: CLI surface over shared fan-control runtime
 
         Usage:
-          fancontrol-mvp temps [--friendly|--raw]
-          fancontrol-mvp fans
-          sudo fancontrol-mvp write --fan <index> --rpm <target> [--hold-seconds 10] [--verify-interval 1]
-          fancontrol-mvp auto --config <path> [--dry-run]
+          fan-control-cli temps [--friendly|--raw]
+          fan-control-cli fans
+          sudo fan-control-cli write --fan <index> --rpm <target> [--hold-seconds 10] [--verify-interval 1]
+          fan-control-cli auto --config <path> [--dry-run]
 
         Commands:
           temps    Print temperature probes from the unified multi-source inventory

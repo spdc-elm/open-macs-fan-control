@@ -1,4 +1,5 @@
 import Foundation
+import FanControlRuntime
 
 struct TemperatureProbe {
     let options: TemperatureOptions

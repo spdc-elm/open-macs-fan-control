@@ -1,15 +1,19 @@
 ## Purpose
 
-Define the long-lived service shape for this project: terminal-first operation, user-login startup as the near-term default, and privilege isolation for low-level fan writes.
+Define the long-lived service shape for this project: shared-runtime-first operation with CLI as the initial operator surface, user-login startup as the near-term default, and privilege isolation for low-level fan writes.
 
 ## Requirements
 
-### Requirement: Terminal-first service model
-The project MUST target a terminal-first operating model rather than a GUI-first application model.
+### Requirement: Shared-runtime-first service model
+The project MUST treat a shared runtime layer as the architectural center of the product, with CLI and future GUI/app surfaces acting as clients of that runtime.
 
 #### Scenario: Operator uses the tool from the terminal
-- **WHEN** a user interacts with the project in its primary supported mode
-- **THEN** the interaction model is command-line driven
+- **WHEN** a user interacts with the project through the currently supported operator surface
+- **THEN** the CLI acts as one client of the shared runtime rather than the whole product architecture
+
+#### Scenario: New user-facing surface is added
+- **WHEN** the project introduces another user-facing surface such as a menu bar app
+- **THEN** that surface integrates through the shared runtime instead of reimplementing core fan-control behavior independently
 
 ### Requirement: User-session startup by default
 The service MUST support starting automatically at user login as the default self-start model for the near-term product.

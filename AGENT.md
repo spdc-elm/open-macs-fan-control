@@ -1,7 +1,7 @@
 # Project context
 
 - This repo is about building a macOS fan-control tool, informed by reverse-engineering notes from an existing reference implementation.
-- Current direction: a **terminal-first** tool, likely split into CLI / daemon / privileged helper.
+- Current direction: a **shared-runtime** architecture with multiple client surfaces, starting with a CLI and likely expanding to a menu bar / GUI app, plus a privileged helper boundary for low-level writes.
 - Current control idea: aggregate thermal input from **CPU** and **GPU** domains, then use a conservative policy such as `max(cpu_demand, gpu_demand)`.
 
 # Where to look
@@ -48,15 +48,33 @@ From the current notes and current exploration decisions:
 - helper installation uses **Authorization + SMJobBless + launchd**
 - aggregate / average sensors already exist in the original product
 - the main limitation appears to be the control model being tied to **one sensor key per fan mode**
-- the likely path here is a new terminal-first daemonized design, not a GUI clone
+- the likely path here is a shared runtime used by multiple shells rather than treating one executable as the whole product
 
 # Current project baseline
 
 - Primary implementation language: **Swift**
-- Product shape: **terminal-first**, with a likely split between CLI / user-session daemon / privileged helper
+- Product shape: **shared runtime + CLI + future GUI/app surfaces**, with a likely split between user-facing clients, possible user-session daemon behavior, and a minimal privileged helper
 - Startup model for the near-term product: **start on user login**, not system boot
 - Privilege model: keep sensor reading and control logic outside root when possible; isolate low-level fan write operations behind a **minimal privileged helper**
-- Near-term priority: build an **MVP validation path** before full productization
+- Near-term priority: preserve the validated CLI path while extracting a reusable shared runtime for future product surfaces
+
+## Current module layout
+
+- `src/FanControlRuntime/`
+  - reusable hardware, telemetry, config, and control-support logic
+- `src/FanControlCLI/`
+  - CLI parsing, terminal-facing command flow, and executable entrypoint
+- `Package.swift`
+  - package name: `MacsFanControl`
+  - shared runtime target: `FanControlRuntime`
+  - CLI executable target/product: `FanControlCLI` / `fan-control-cli`
+
+## Current architecture direction
+
+- Do **not** assume the current MVP executable layout is the intended end-state architecture.
+- Prefer a boundary of: **shared runtime/core** → thin CLI shell → future GUI/menu bar shell.
+- GUI clients should reuse shared Swift APIs directly; they should **not** shell out to the CLI and parse terminal output.
+- CLI remains a first-class operator/debugging surface, not a disposable prototype.
 
 # Current MVP validation scope
 

@@ -1,5 +1,5 @@
 import XCTest
-@testable import FanControlMVP
+@testable import FanControlRuntime
 
 final class AutomaticControlTests: XCTestCase {
     func testCpuDemandDominatesRequestedTarget() {

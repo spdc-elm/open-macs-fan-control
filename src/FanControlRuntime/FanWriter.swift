@@ -1,6 +1,6 @@
 import Foundation
 
-protocol PrivilegedFanWriter {
+package protocol PrivilegedFanWriter {
     func inspectFans() throws -> [FanReading]
     func applyTarget(fanIndex: Int, rpm: Int) throws
     func restoreAutomaticMode(fanIndices: [Int]) throws
@@ -49,7 +49,7 @@ private struct CodableFanReading: Codable {
     }
 }
 
-final class HelperFanWriterClient: PrivilegedFanWriter {
+package final class HelperFanWriterClient: PrivilegedFanWriter {
     private let process: Process
     private let stdinPipe: Pipe
     private let stdoutReader: PipeLineReader
@@ -64,7 +64,7 @@ final class HelperFanWriterClient: PrivilegedFanWriter {
         self.stderrPipe = stderrPipe
     }
 
-    static func launch(executablePath: String) throws -> HelperFanWriterClient {
+    package static func launch(executablePath: String) throws -> HelperFanWriterClient {
         let process = Process()
         let stdinPipe = Pipe()
         let stdoutPipe = Pipe()
@@ -92,20 +92,20 @@ final class HelperFanWriterClient: PrivilegedFanWriter {
         )
     }
 
-    func inspectFans() throws -> [FanReading] {
+    package func inspectFans() throws -> [FanReading] {
         let response = try send(.init(command: "inspectFans", fanIndex: nil, rpm: nil, fanIndices: nil))
         return (response.fans ?? []).map(\.asFanReading)
     }
 
-    func applyTarget(fanIndex: Int, rpm: Int) throws {
+    package func applyTarget(fanIndex: Int, rpm: Int) throws {
         _ = try send(.init(command: "applyTarget", fanIndex: fanIndex, rpm: rpm, fanIndices: nil))
     }
 
-    func restoreAutomaticMode(fanIndices: [Int]) throws {
+    package func restoreAutomaticMode(fanIndices: [Int]) throws {
         _ = try send(.init(command: "restoreAutomaticMode", fanIndex: nil, rpm: nil, fanIndices: fanIndices))
     }
 
-    func shutdown() throws {
+    package func shutdown() throws {
         guard process.isRunning else {
             return
         }
@@ -139,10 +139,12 @@ final class HelperFanWriterClient: PrivilegedFanWriter {
     }
 }
 
-struct WriterServiceCommand {
-    func run() throws {
+package struct WriterServiceCommand {
+    package init() {}
+
+    package func run() throws {
         guard geteuid() == 0 else {
-            throw CLIError("writer-service requires root privileges")
+            throw RuntimeCommandError("writer-service requires root privileges")
         }
 
         let connection = try SMCConnection.open()
@@ -210,6 +212,18 @@ struct WriterServiceCommand {
         default:
             throw AutomaticControlError.writer("unknown writer command: \(request.command)")
         }
+    }
+}
+
+struct RuntimeCommandError: LocalizedError {
+    let message: String
+
+    init(_ message: String) {
+        self.message = message
+    }
+
+    var errorDescription: String? {
+        message
     }
 }
 

@@ -2,14 +2,18 @@
 import PackageDescription
 
 let package = Package(
-    name: "FanControlMVP",
+    name: "MacsFanControl",
     platforms: [
         .macOS(.v13)
     ],
     products: [
+        .library(
+            name: "FanControlRuntime",
+            targets: ["FanControlRuntime"]
+        ),
         .executable(
-            name: "fancontrol-mvp",
-            targets: ["FanControlMVP"]
+            name: "fan-control-cli",
+            targets: ["FanControlCLI"]
         )
     ],
     targets: [
@@ -18,10 +22,10 @@ let package = Package(
             path: "src/CSMCBridge",
             publicHeadersPath: "."
         ),
-        .executableTarget(
-            name: "FanControlMVP",
+        .target(
+            name: "FanControlRuntime",
             dependencies: ["CSMCBridge"],
-            path: "src/FanControlMVP",
+            path: "src/FanControlRuntime",
             resources: [
                 .copy("Resources/IOKitSensors.xml")
             ],
@@ -30,10 +34,15 @@ let package = Package(
                 .linkedFramework("CoreFoundation")
             ]
         ),
+        .executableTarget(
+            name: "FanControlCLI",
+            dependencies: ["FanControlRuntime"],
+            path: "src/FanControlCLI"
+        ),
         .testTarget(
-            name: "FanControlMVPTests",
-            dependencies: ["FanControlMVP"],
-            path: "Tests/FanControlMVPTests"
+            name: "FanControlRuntimeTests",
+            dependencies: ["FanControlRuntime"],
+            path: "Tests/FanControlRuntimeTests"
         )
     ]
 )

@@ -1,7 +1,7 @@
 import Foundation
 import IOKit
 
-enum TemperatureSource: String {
+package enum TemperatureSource: String {
     case iohid = "IOHID"
     case smc = "SMC"
     case gpu = "GPU"
@@ -9,14 +9,14 @@ enum TemperatureSource: String {
     case aggregate = "Aggregate"
 }
 
-struct UnifiedTemperatureReading {
-    let source: TemperatureSource
-    let rawName: String
-    let displayName: String
-    let valueCelsius: Double
-    let group: String?
-    let type: String?
-    let sortKey: String
+package struct UnifiedTemperatureReading {
+    package let source: TemperatureSource
+    package let rawName: String
+    package let displayName: String
+    package let valueCelsius: Double
+    package let group: String?
+    package let type: String?
+    package let sortKey: String
 }
 
 protocol TemperatureSensor {
@@ -42,11 +42,11 @@ final class TemperatureRuntime {
     }
 }
 
-struct TemperatureInventory {
+package struct TemperatureInventory {
     let runtime: TemperatureRuntime
     let sensors: [any TemperatureSensor]
 
-    static func loadDefault() -> TemperatureInventory {
+    package static func loadDefault() -> TemperatureInventory {
         let runtime = TemperatureRuntime()
         let providers: [any TemperatureSensorProvider] = [
             IOHIDTemperatureProvider(),
@@ -61,7 +61,7 @@ struct TemperatureInventory {
         )
     }
 
-    func refreshAll() -> [UnifiedTemperatureReading] {
+    package func refreshAll() -> [UnifiedTemperatureReading] {
         var baseReadings: [UnifiedTemperatureReading] = []
 
         for sensor in sensors {

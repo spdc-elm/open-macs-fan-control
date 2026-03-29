@@ -25,28 +25,28 @@ enum SMCError: LocalizedError {
     }
 }
 
-struct FanReading {
-    let index: Int
-    let currentRPM: Int
-    let minimumRPM: Int
-    let maximumRPM: Int
-    let targetRPM: Int?
-    let modeValue: Int?
+package struct FanReading {
+    package let index: Int
+    package let currentRPM: Int
+    package let minimumRPM: Int
+    package let maximumRPM: Int
+    package let targetRPM: Int?
+    package let modeValue: Int?
 
-    var modeDescription: String {
+    package var modeDescription: String {
         guard let modeValue else { return "unknown" }
         return modeValue == 0 ? "auto" : "manual(\(modeValue))"
     }
 }
 
-final class SMCConnection {
+package final class SMCConnection {
     private let connection: io_connect_t
 
     private init(connection: io_connect_t) {
         self.connection = connection
     }
 
-    static func open() throws -> SMCConnection {
+    package static func open() throws -> SMCConnection {
         guard let matching = IOServiceMatching("AppleSMC") else {
             throw SMCError.serviceNotFound
         }
@@ -66,16 +66,16 @@ final class SMCConnection {
         return SMCConnection(connection: connection)
     }
 
-    func close() {
+    package func close() {
         IOServiceClose(connection)
     }
 
-    func readFans() throws -> [FanReading] {
+    package func readFans() throws -> [FanReading] {
         let fanCount = try readUnsignedInt(key: "FNum")
         return try (0..<fanCount).map { try readFan(index: $0) }
     }
 
-    func readFan(index: Int) throws -> FanReading {
+    package func readFan(index: Int) throws -> FanReading {
         FanReading(
             index: index,
             currentRPM: Int(round(try readRPM(key: fanKey(index, suffix: "Ac")))),
@@ -153,7 +153,7 @@ final class SMCConnection {
         }
     }
 
-    func setFanManualMode(index: Int) throws {
+    package func setFanManualMode(index: Int) throws {
         let modeKey = fanKey(index, suffix: "Md")
         if (try? write(key: modeKey, dataType: "ui8", bytes: [1])) != nil {
             return
@@ -165,7 +165,7 @@ final class SMCConnection {
         try writeUnsignedInt(key: maskKey, value: updatedMask)
     }
 
-    func restoreAutomaticMode(index: Int) throws {
+    package func restoreAutomaticMode(index: Int) throws {
         let modeKey = fanKey(index, suffix: "Md")
         if (try? write(key: modeKey, dataType: "ui8", bytes: [0])) != nil {
             return
@@ -177,7 +177,7 @@ final class SMCConnection {
         try writeUnsignedInt(key: maskKey, value: updatedMask)
     }
 
-    func setFanTargetRPM(index: Int, rpm: Int) throws {
+    package func setFanTargetRPM(index: Int, rpm: Int) throws {
         let clamped = max(0, rpm)
         let targetKey = fanKey(index, suffix: "Tg")
         let targetInfo = try? keyInfo(for: targetKey)
