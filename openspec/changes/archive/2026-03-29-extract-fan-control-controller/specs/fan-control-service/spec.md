@@ -1,7 +1,5 @@
-## Purpose
+## MODIFIED Requirements
 
-Define the long-lived service shape for this project: shared-runtime-first operation with CLI as the initial operator surface, user-login startup as the near-term default, and privilege isolation for low-level fan writes.
-## Requirements
 ### Requirement: Shared-runtime-first service model
 The project MUST treat the shared runtime layer and controller service together as the architectural center of the product, with CLI and GUI/app surfaces acting as peer clients of that controller-facing runtime rather than as competing loop hosts.
 
@@ -14,13 +12,6 @@ The project MUST treat the shared runtime layer and controller service together 
 - **THEN** that surface MUST integrate as a peer client of the controller service
 - **AND** it MUST NOT rely on spawning the CLI as the intended long-term integration boundary
 
-### Requirement: User-session startup by default
-The service MUST support starting automatically at user login as the default self-start model for the near-term product.
-
-#### Scenario: User enables login startup
-- **WHEN** the user configures the tool to start automatically
-- **THEN** the tool starts when that user logs into macOS
-
 ### Requirement: Privileged fan writes are isolated
 The system MUST isolate low-level fan write operations behind a dedicated privileged writer daemon, with the non-privileged controller service as the only automatic-control caller of that privileged boundary.
 
@@ -32,4 +23,3 @@ The system MUST isolate low-level fan write operations behind a dedicated privil
 - **WHEN** a user-facing client needs to affect automatic fan control
 - **THEN** that client MUST send the request to the controller service
 - **AND** it MUST NOT communicate with the privileged writer daemon directly
-

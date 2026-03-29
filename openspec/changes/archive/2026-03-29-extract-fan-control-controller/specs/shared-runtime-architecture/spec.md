@@ -1,7 +1,5 @@
-## Purpose
+## MODIFIED Requirements
 
-Define the long-lived architectural boundary for reusable fan-control runtime logic and keep client surfaces thin over that shared runtime.
-## Requirements
 ### Requirement: Reusable fan-control runtime exists outside client entrypoints
 The system MUST place reusable hardware access, telemetry assembly, configuration loading, control-planning APIs, and controller/client service contracts in a shared runtime layer that is not itself the CLI or GUI entrypoint.
 
@@ -26,4 +24,3 @@ The system MUST keep client-specific concerns separated from the shared runtime 
 - **WHEN** app lifecycle, menu bar UI, or other GUI presentation behavior is needed
 - **THEN** that behavior MUST live in the GUI client layer
 - **AND** the GUI MUST NOT directly communicate with the privileged writer daemon
-

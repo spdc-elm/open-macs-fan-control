@@ -16,6 +16,10 @@ let package = Package(
             targets: ["RootWriterDaemon"]
         ),
         .executable(
+            name: "fan-control-controller",
+            targets: ["FanControlController"]
+        ),
+        .executable(
             name: "fan-control-cli",
             targets: ["FanControlCLI"]
         ),
@@ -46,6 +50,11 @@ let package = Package(
             name: "RootWriterDaemon",
             dependencies: ["FanControlRuntime"],
             path: "src/RootWriterDaemon"
+        ),
+        .executableTarget(
+            name: "FanControlController",
+            dependencies: ["FanControlRuntime"],
+            path: "src/FanControlController"
         ),
         .executableTarget(
             name: "FanControlCLI",

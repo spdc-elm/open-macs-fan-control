@@ -1,116 +1,76 @@
 import Foundation
 import FanControlRuntime
 
+enum AutomaticControlAction {
+    case start
+    case stop
+    case reload
+    case status
+}
+
 struct AutomaticControlOptions {
-    let configPath: String
+    let action: AutomaticControlAction
+    let configPath: String?
     let dryRun: Bool
 }
 
 struct AutomaticControlCommand {
     let options: AutomaticControlOptions
+    let currentExecutablePath: String
 
     func run() throws {
-        let inventory = TemperatureInventory.loadDefault()
-        let writer = try DaemonFanWriterClient.connect()
-        defer {
-            try? writer.shutdown()
-        }
-
-        let bootstrap = AutomaticControlBootstrap(inventory: inventory, writer: writer)
-        let config = try bootstrap.loadResolvedConfig(from: options.configPath)
-
-        printResolvedConfiguration(config)
         if options.dryRun {
-            print("dry-run complete; no fan overrides were issued")
+            try runDryRun()
             return
         }
 
-        try runLoop(config: config, inventory: inventory, writer: writer)
+        switch options.action {
+        case .start:
+            try AutomaticControlControllerLauncher(currentExecutablePath: currentExecutablePath).ensureRunning()
+            let client = try AutomaticControlControllerClient.connect()
+            defer { try? client.close() }
+            let status = try client.start(configPath: requiredConfigPath(action: "start"))
+            printStatus(status, headline: "# Automatic control controller started")
+        case .reload:
+            let client = try AutomaticControlControllerClient.connect()
+            defer { try? client.close() }
+            let status = try client.reload(configPath: requiredConfigPath(action: "reload"))
+            printStatus(status, headline: "# Automatic control controller reloaded")
+        case .stop:
+            let client = try AutomaticControlControllerClient.connect()
+            defer { try? client.close() }
+            let status = try client.stop()
+            printStatus(status, headline: "# Automatic control controller stopped")
+        case .status:
+            let client = try AutomaticControlControllerClient.connect()
+            defer { try? client.close() }
+            let status = try client.status()
+            printStatus(status, headline: "# Automatic control controller status")
+        }
     }
 
-    private func runLoop(
-        config: ResolvedAutomaticControlConfig,
-        inventory: TemperatureInventory,
-        writer: any PrivilegedFanWriter
-    ) throws {
-        print("starting automatic control; press Ctrl-C for handled shutdown")
+    private func runDryRun() throws {
+        let inventory = TemperatureInventory.loadDefault()
+        let writer = try DaemonFanWriterClient.connect()
+        defer { try? writer.shutdown() }
 
-        let signalMonitor = SignalMonitor()
-        defer { signalMonitor.stop() }
-
-        let resolver = AutomaticControlResolver(config: config)
-        var fanStates = Dictionary(uniqueKeysWithValues: config.fans.map { ($0.fanIndex, FanControlState()) })
-        var lastSuccessfulSampleAt = Date()
-
-        do {
-            while true {
-                RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.05))
-                if signalMonitor.terminationRequested {
-                    print("received handled termination signal; restoring automatic mode")
-                    break
-                }
-
-                let readings = inventory.refreshAll()
-                if let snapshot = try? resolver.resolveSnapshot(from: readings) {
-                    lastSuccessfulSampleAt = Date()
-                    try applyCycle(
-                        config: config,
-                        snapshot: snapshot,
-                        resolver: resolver,
-                        fanStates: &fanStates,
-                        writer: writer
-                    )
-                } else if Date().timeIntervalSince(lastSuccessfulSampleAt) >= config.staleSensorTimeoutSeconds {
-                    throw CLIError("required CPU/GPU domain sensor became stale")
-                }
-
-                Thread.sleep(forTimeInterval: config.pollingIntervalSeconds)
-            }
-        } catch {
-            try? writer.restoreAutomaticMode(fanIndices: config.fans.map(\.fanIndex))
-            throw error
-        }
-
-        try writer.restoreAutomaticMode(fanIndices: config.fans.map(\.fanIndex))
-        print("restored automatic mode for managed fans")
+        let bootstrap = AutomaticControlBootstrap(inventory: inventory, writer: writer)
+        let config = try bootstrap.loadResolvedConfig(from: requiredConfigPath(action: "dry-run"))
+        printResolvedConfiguration(config)
+        print("dry-run complete; controller validation succeeded and no fan overrides were issued")
     }
 
-    private func applyCycle(
-        config: ResolvedAutomaticControlConfig,
-        snapshot: DomainSnapshot,
-        resolver: AutomaticControlResolver,
-        fanStates: inout [Int: FanControlState],
-        writer: any PrivilegedFanWriter
-    ) throws {
-        let now = Date()
-
-        for fan in config.fans {
-            let plan = resolver.demandPlan(for: snapshot, fan: fan)
-            var state = fanStates[fan.fanIndex] ?? FanControlState()
-            guard let targetRPM = state.nextWriteTarget(
-                requestedRPM: plan.requestedTargetRPM,
-                now: now,
-                smoothingStepRPM: config.smoothingStepRPM,
-                hysteresisRPM: config.hysteresisRPM,
-                minimumWriteInterval: config.minimumWriteIntervalSeconds
-            ) else {
-                fanStates[fan.fanIndex] = state
-                continue
-            }
-
-            try writer.applyTarget(fanIndex: fan.fanIndex, rpm: targetRPM)
-            state.recordWrite(targetRPM: targetRPM, at: now)
-            fanStates[fan.fanIndex] = state
-
-            print(
-                "fan \(fan.fanIndex): cpu=\(plan.cpuDemandRPM)rpm gpu=\(plan.gpuDemandRPM)rpm target=\(plan.requestedTargetRPM)rpm applied=\(targetRPM)rpm"
-            )
+    private func requiredConfigPath(action: String) throws -> String {
+        guard let configPath = options.configPath, !configPath.isEmpty else {
+            throw CLIError("auto \(action) requires --config <path>")
         }
+        return configPath
     }
 
     private func printResolvedConfiguration(_ config: ResolvedAutomaticControlConfig) {
-        print("# Automatic control initialization")
+        print("# Automatic control validation")
         print("config: \(config.sourcePath)")
+        print("controllerSocket=\(AutomaticControlControllerPaths.socketPath)")
         print("writerDaemonSocket=\(RootWriterDaemonPaths.socketPath)")
         print("pollingIntervalSeconds=\(config.pollingIntervalSeconds) minimumWriteIntervalSeconds=\(config.minimumWriteIntervalSeconds) staleSensorTimeoutSeconds=\(config.staleSensorTimeoutSeconds)")
         print("smoothingStepRPM=\(config.smoothingStepRPM) hysteresisRPM=\(config.hysteresisRPM)")
@@ -121,5 +81,39 @@ struct AutomaticControlCommand {
                 "fan \(fan.fanIndex): policyMin=\(fan.minimumRPM) policyMax=\(fan.maximumRPM) hardwareMin=\(fan.hardwareMinimumRPM) hardwareMax=\(fan.hardwareMaximumRPM)"
             )
         }
+    }
+
+    private func printStatus(_ status: AutomaticControlStatusSnapshot, headline: String) {
+        print(headline)
+        print("controllerSocket=\(AutomaticControlControllerPaths.socketPath)")
+        print("phase=\(status.phase.rawValue)")
+        print("activeConfig=\(status.activeConfigPath ?? "none")")
+        print("writerConnected=\(status.writerConnected)")
+
+        if let lastSampleAt = status.lastSampleAt {
+            print("lastSampleAt=\(iso8601(lastSampleAt))")
+        }
+        if let lastSuccessfulSampleAt = status.lastSuccessfulSampleAt {
+            print("lastSuccessfulSampleAt=\(iso8601(lastSuccessfulSampleAt))")
+        }
+        if let lastError = status.lastError {
+            print("lastError=\(lastError)")
+        }
+
+        if status.fans.isEmpty {
+            print("managedFans=none")
+            return
+        }
+
+        for fan in status.fans {
+            let requested = fan.lastRequestedRPM.map(String.init) ?? "n/a"
+            let applied = fan.lastAppliedRPM.map(String.init) ?? "n/a"
+            let lastWrite = fan.lastWriteAt.map(iso8601) ?? "n/a"
+            print("fan \(fan.fanIndex): requested=\(requested)rpm applied=\(applied)rpm lastWriteAt=\(lastWrite)")
+        }
+    }
+
+    private func iso8601(_ date: Date) -> String {
+        ISO8601DateFormatter().string(from: date)
     }
 }

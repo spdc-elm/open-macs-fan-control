@@ -45,10 +45,33 @@ struct CLI {
     }
 
     private func parseAutomatic(_ args: ArraySlice<String>) throws -> AutomaticControlOptions {
+        guard let actionToken = args.first else {
+            throw CLIError("auto requires one of: start, stop, reload, status")
+        }
+
+        let action: AutomaticControlAction
+        switch actionToken {
+        case "start":
+            action = .start
+        case "stop":
+            action = .stop
+        case "reload":
+            action = .reload
+        case "status":
+            action = .status
+        default:
+            // Keep the old shape as a compatibility alias for `auto start`.
+            action = .start
+        }
+
         var configPath: String?
         var dryRun = false
 
-        var iterator = args.makeIterator()
+        let optionArgs = actionToken == "start" || actionToken == "stop" || actionToken == "reload" || actionToken == "status"
+            ? args.dropFirst()
+            : args
+
+        var iterator = optionArgs.makeIterator()
         while let arg = iterator.next() {
             switch arg {
             case "--config":
@@ -63,11 +86,13 @@ struct CLI {
             }
         }
 
-        guard let configPath else {
-            throw CLIError("auto requires --config <path>")
+        if action == .start || action == .reload || dryRun {
+            guard configPath != nil else {
+                throw CLIError("auto \(action == .reload ? "reload" : "start") requires --config <path>")
+            }
         }
 
-        return AutomaticControlOptions(configPath: configPath, dryRun: dryRun)
+        return AutomaticControlOptions(action: action, configPath: configPath, dryRun: dryRun)
     }
 
     private func parseWrite(_ args: ArraySlice<String>) throws -> WriteOptions {
@@ -150,7 +175,10 @@ struct CLI {
           fan-control-cli temps [--friendly|--raw]
           fan-control-cli fans
           fan-control-cli write --fan <index> --rpm <target> [--hold-seconds 10] [--verify-interval 1]
-          fan-control-cli auto --config <path> [--dry-run]
+          fan-control-cli auto start --config <path> [--dry-run]
+          fan-control-cli auto reload --config <path>
+          fan-control-cli auto stop
+          fan-control-cli auto status
           sudo fan-control-cli daemon <install|remove>
           fan-control-cli daemon status
 
@@ -158,7 +186,7 @@ struct CLI {
           temps    Print temperature probes from the unified multi-source inventory
           fans     Print current fan RPM readings and fan metadata through the root writer daemon
           write    Attempt a manual fan RPM override through the root writer daemon, verify readback, then restore auto mode
-          auto     Start config-driven automatic fan control through the root writer daemon
+          auto     Control the dedicated automatic-control controller service
           daemon   Install, remove, or inspect the root writer daemon lifecycle
         """
     }
@@ -184,7 +212,7 @@ enum Command {
             defer { try? writer.shutdown() }
             try FanWriteCommand(writer: writer, options: options).run()
         case .automatic(let options):
-            try AutomaticControlCommand(options: options).run()
+            try AutomaticControlCommand(options: options, currentExecutablePath: CommandLine.arguments[0]).run()
         case .daemon(let action):
             try DaemonLifecycleCommand(action: action, cliExecutablePath: CommandLine.arguments[0]).run()
         }
