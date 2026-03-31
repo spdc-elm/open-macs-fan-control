@@ -126,9 +126,24 @@ final class MenuBarControllerStore: ObservableObject {
 
         runControlAction {
             try launcher.ensureRunning()
-            let client = try AutomaticControlControllerClient.connect()
-            defer { try? client.close() }
-            self.status = try client.start(configPath: configPath)
+
+            // The controller may need a moment after ensureRunning returns
+            // before it can reliably handle commands, especially on cold boot.
+            var lastError: Error?
+            for attempt in 0..<3 {
+                if attempt > 0 {
+                    Thread.sleep(forTimeInterval: 0.5)
+                }
+                do {
+                    let client = try AutomaticControlControllerClient.connect()
+                    defer { try? client.close() }
+                    self.status = try client.start(configPath: configPath)
+                    return
+                } catch {
+                    lastError = error
+                }
+            }
+            throw lastError!
         }
     }
 
@@ -177,6 +192,7 @@ struct MenuBarPanel: View {
                     Text(errorMessage)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 

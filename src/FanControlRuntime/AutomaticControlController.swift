@@ -816,7 +816,7 @@ package struct AutomaticControlControllerLauncher {
         process.standardError = handle
         try process.run()
 
-        let deadline = Date().addingTimeInterval(2)
+        let deadline = Date().addingTimeInterval(5)
         while Date() < deadline {
             if let client = try? AutomaticControlControllerClient.connect() {
                 try? client.close()
